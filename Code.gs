@@ -357,6 +357,23 @@ function runAutoAssignment() {
   today.setHours(0, 0, 0, 0);
   var cutoff = new Date(today.getTime() + AUTO_ASSIGN_DAYS_OUT * 86400000);
 
+  // Track assigned time ranges per docent per day: { "name|2026-06-01": [[start,end], ...] }
+  var assignedTimes = {};
+
+  // Pre-load existing assignments so we don't double-book with already-assigned slots
+  for (var i = 1; i < schedData.length; i++) {
+    if ((schedData[i][5] || '').toString() !== 'Assigned') continue;
+    var aDate = new Date(schedData[i][1]);
+    var aDateKey = formatDateISO(aDate);
+    var aTimes = parseTimeRange(schedData[i][2], aDate);
+    var aNames = (schedData[i][6] || '').toString().split(',').map(function(s) { return s.trim(); });
+    for (var j = 0; j < aNames.length; j++) {
+      var key = aNames[j] + '|' + aDateKey;
+      if (!assignedTimes[key]) assignedTimes[key] = [];
+      assignedTimes[key].push([aTimes[0].getTime(), aTimes[1].getTime()]);
+    }
+  }
+
   for (var i = 1; i < schedData.length; i++) {
     var row = schedData[i];
     var slotId = (row[0] || '').toString();
@@ -370,6 +387,11 @@ function runAutoAssignment() {
     // Only assign Open slots within the assignment window
     if (status !== '' && status !== 'Open') continue;
     if (date > cutoff || date < today) continue;
+
+    var slotTimes = parseTimeRange(timeRaw, date);
+    var slotStart = slotTimes[0].getTime();
+    var slotEnd = slotTimes[1].getTime();
+    var slotDateKey = formatDateISO(date);
 
     var signups = signupMap[slotId] || [];
 
@@ -413,7 +435,17 @@ function runAutoAssignment() {
     }
 
     // Sort by lowest quarterly count (fair rotation)
-    var eligible = signups.filter(function(n) { return tally[n]; });
+    // Filter out anyone who already has a conflicting assignment on this day
+    var eligible = signups.filter(function(n) {
+      if (!tally[n]) return false;
+      var key = n + '|' + slotDateKey;
+      var existing = assignedTimes[key] || [];
+      for (var k = 0; k < existing.length; k++) {
+        // Overlaps if one starts before the other ends and vice versa
+        if (slotStart < existing[k][1] && slotEnd > existing[k][0]) return false;
+      }
+      return true;
+    });
     eligible.sort(function(a, b) { return tally[a].count - tally[b].count; });
 
     var assigned = eligible.slice(0, docentsNeeded);
@@ -423,12 +455,17 @@ function runAutoAssignment() {
     schedSheet.getRange(i + 1, 6).setValue('Assigned');  // Status
     schedSheet.getRange(i + 1, 7).setValue(assigned.join(', '));  // Assigned Docents
 
-    // Update tallies and send calendar invites
+    // Update tallies, send calendar invites, and track the new assignment
     for (var j = 0; j < assigned.length; j++) {
       var name = assigned[j];
       tally[name].count += 1;
       docentSheet.getRange(tally[name].row, 3).setValue(tally[name].count);
       sendCalendarInvite(tally[name].email, name, slotId, date, timeRaw, tourType);
+
+      // Record this assignment so subsequent slots in the loop won't overlap
+      var key = name + '|' + slotDateKey;
+      if (!assignedTimes[key]) assignedTimes[key] = [];
+      assignedTimes[key].push([slotStart, slotEnd]);
     }
 
     // Notify docents who signed up but weren't assigned
