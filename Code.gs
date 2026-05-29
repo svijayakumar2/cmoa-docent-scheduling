@@ -371,7 +371,45 @@ function runAutoAssignment() {
     if (date > cutoff || date < today) continue;
 
     var signups = signupMap[slotId] || [];
-    if (signups.length === 0) continue;
+
+    // If nobody signed up, email weekday regulars to drum up interest
+    if (signups.length === 0) {
+      var slotDay = date.getDay();
+
+      // Build slotId -> day-of-week map from schedule
+      var slotDayMap = {};
+      for (var k = 1; k < schedData.length; k++) {
+        var sd = new Date(schedData[k][1]);
+        if (!isNaN(sd.getTime())) slotDayMap[(schedData[k][0] || '').toString()] = sd.getDay();
+      }
+
+      // Count each docent's signups on this weekday
+      var weekdayCounts = {};
+      for (var k = 1; k < signupData.length; k++) {
+        var dName = (signupData[k][1] || '').toString();
+        var sId = (signupData[k][2] || '').toString();
+        if (slotDayMap[sId] === slotDay) {
+          weekdayCounts[dName] = (weekdayCounts[dName] || 0) + 1;
+        }
+      }
+
+      var MIN_WEEKDAY_SIGNUPS = 2;
+      for (var name in weekdayCounts) {
+        if (weekdayCounts[name] < MIN_WEEKDAY_SIGNUPS) continue;
+        if (!tally[name]) continue;
+        MailApp.sendEmail(
+          tally[name].email,
+          'Tour needs you: ' + tourType + ' on ' + formatDateNice(date),
+          'Hi ' + name + ',\n\n' +
+          'We still need someone for the ' + tourType + ' tour on ' +
+          formatDateNice(date) + ' at ' + time + '.\n\n' +
+          'You often sign up for ' + dayName(slotDay) + ' tours. ' +
+          'If you can help, visit the scheduling site and check this slot.\n\n' +
+          '-- Tour Scheduler'
+        );
+      }
+      continue;
+    }
 
     // Sort by lowest quarterly count (fair rotation)
     var eligible = signups.filter(function(n) { return tally[n]; });
@@ -462,7 +500,7 @@ function onEditInstallable(e) {
 
   var webAppUrl = ScriptApp.getService().getUrl();
 
-  // Email backups immediately
+  // Tier 1: Email direct backups immediately
   for (var i = 0; i < backups.length; i++) {
     var name = backups[i];
     var email = emailMap[name];
@@ -476,17 +514,74 @@ function onEditInstallable(e) {
       'A tour you signed up as available for has opened up:\n\n' +
       tourType + ' on ' + formatDateNice(date) + ' at ' + time + '\n\n' +
       'First to claim wins. Click here to claim:\n' + claimUrl + '\n\n' +
-      'If nobody claims within ' + CLAIM_WINDOW_DAYS + ' days, this goes to Kathy.\n\n' +
       '-- Tour Scheduler'
     );
   }
 
-  // If no backups exist, email Kathy immediately
-  if (backups.length === 0) {
+  // Tier 2: Email docents who tend to be free on this day of the week
+  // but didn't sign up for this specific slot
+  var cancelledDay = date.getDay(); // 0=Sun, 1=Mon, etc.
+  var schedAllData = schedSheet.getDataRange().getValues();
+
+  // Build a map of slotId -> day of week from the schedule
+  var slotDayMap = {};
+  for (var i = 1; i < schedAllData.length; i++) {
+    var sid = (schedAllData[i][0] || '').toString();
+    var sdate = new Date(schedAllData[i][1]);
+    if (!isNaN(sdate.getTime())) slotDayMap[sid] = sdate.getDay();
+  }
+
+  // Count how many times each docent has signed up for this weekday
+  var weekdayCounts = {};
+  for (var i = 1; i < signupData.length; i++) {
+    var dName = (signupData[i][1] || '').toString();
+    var sId = (signupData[i][2] || '').toString();
+    if (slotDayMap[sId] === cancelledDay) {
+      weekdayCounts[dName] = (weekdayCounts[dName] || 0) + 1;
+    }
+  }
+
+  // Already contacted: backups + originally assigned
+  var alreadyContacted = {};
+  for (var i = 0; i < backups.length; i++) alreadyContacted[backups[i]] = true;
+  for (var i = 0; i < assignedList.length; i++) alreadyContacted[assignedList[i]] = true;
+
+  // Email weekday regulars (signed up for this weekday 2+ times before)
+  var MIN_WEEKDAY_SIGNUPS = 2;
+  for (var name in weekdayCounts) {
+    if (alreadyContacted[name]) continue;
+    if (weekdayCounts[name] < MIN_WEEKDAY_SIGNUPS) continue;
+    var email = emailMap[name];
+    if (!email) continue;
+    var claimUrl = webAppUrl + '?action=claim&slot=' + encodeURIComponent(slotId) +
+                   '&docent=' + encodeURIComponent(name);
+    MailApp.sendEmail(
+      email,
+      'Tour opening: ' + tourType + ' on ' + formatDateNice(date),
+      'Hi ' + name + ',\n\n' +
+      'A ' + tourType + ' tour on ' + formatDateNice(date) + ' at ' + time +
+      ' has just opened up. You often sign up for ' + dayName(cancelledDay) +
+      ' tours, so we thought you might be interested.\n\n' +
+      'First to claim wins. Click here to claim:\n' + claimUrl + '\n\n' +
+      '-- Tour Scheduler'
+    );
+  }
+
+  // If nobody at all was contacted, email Kathy
+  var weekdayRegularsContacted = false;
+  for (var name in weekdayCounts) {
+    if (!alreadyContacted[name] && weekdayCounts[name] >= MIN_WEEKDAY_SIGNUPS && emailMap[name]) {
+      weekdayRegularsContacted = true;
+      break;
+    }
+  }
+
+  if (backups.length === 0 && !weekdayRegularsContacted) {
     MailApp.sendEmail(
       KATHY_EMAIL,
       'No backups available: ' + tourType + ' on ' + formatDateNice(date),
-      'A tour was cancelled but nobody else signed up for this slot.\n\n' +
+      'A tour was cancelled but nobody else signed up for this slot and no ' +
+      dayName(cancelledDay) + ' regulars were found.\n\n' +
       'Slot: ' + slotId + '\nTour: ' + tourType + '\nDate: ' + formatDateNice(date) +
       '\nTime: ' + time + '\n\nPlease assign manually.'
     );
@@ -646,4 +741,8 @@ function formatDateNice(date) {
 
 function formatDateISO(date) {
   return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function dayName(dayNum) {
+  return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dayNum];
 }
