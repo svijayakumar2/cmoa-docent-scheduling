@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CMOA Docent Tour Scheduling</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: Georgia, 'Times New Roman', serif;
+      background: #faf9f6;
+      color: #2c2c2c;
+      line-height: 1.6;
+    }
+
+    header {
+      background: #1a3a4a;
+      color: #fff;
+      padding: 2rem 1.5rem;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 1.8rem;
+      font-weight: 400;
+      letter-spacing: 0.02em;
+    }
+
+    header p {
+      font-size: 0.95rem;
+      opacity: 0.8;
+      margin-top: 0.3rem;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 1.5rem;
+    }
+
+    /* Docent selector */
+    .docent-selector {
+      background: #fff;
+      border: 1px solid #d4cfc7;
+      border-radius: 6px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .docent-selector label {
+      display: block;
+      font-size: 0.9rem;
+      color: #666;
+      margin-bottom: 0.4rem;
+    }
+
+    .docent-selector select {
+      width: 100%;
+      font-size: 1.1rem;
+      font-family: Georgia, serif;
+      padding: 0.5rem;
+      border: 1px solid #d4cfc7;
+      border-radius: 4px;
+      background: #fff;
+    }
+
+    /* Sections */
+    .section-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      color: #1a3a4a;
+      margin-bottom: 0.75rem;
+      padding-bottom: 0.4rem;
+      border-bottom: 2px solid #1a3a4a;
+    }
+
+    /* Slot cards */
+    .slot-card {
+      background: #fff;
+      border: 1px solid #d4cfc7;
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 1rem;
+      transition: border-color 0.2s;
+    }
+
+    .slot-card:hover {
+      border-color: #1a3a4a;
+    }
+
+    .slot-card.assigned {
+      background: #f0f5f0;
+      border-color: #a8c8a8;
+    }
+
+    .slot-card.cancelled {
+      background: #fdf5f0;
+      border-color: #d4a888;
+    }
+
+    .slot-card input[type="checkbox"] {
+      margin-top: 0.35rem;
+      width: 18px;
+      height: 18px;
+      flex-shrink: 0;
+      accent-color: #1a3a4a;
+    }
+
+    .slot-info {
+      flex: 1;
+    }
+
+    .slot-tour {
+      font-weight: 600;
+      font-size: 1.05rem;
+      color: #1a3a4a;
+    }
+
+    .slot-date {
+      font-size: 0.95rem;
+      color: #555;
+    }
+
+    .slot-meta {
+      font-size: 0.85rem;
+      color: #888;
+      margin-top: 0.2rem;
+    }
+
+    .slot-status {
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      border-radius: 12px;
+      flex-shrink: 0;
+      margin-top: 0.2rem;
+    }
+
+    .status-open {
+      background: #e8f0e8;
+      color: #3a6e3a;
+    }
+
+    .status-assigned {
+      background: #e0ece0;
+      color: #2a5a2a;
+    }
+
+    .status-cancelled {
+      background: #f5e0d0;
+      color: #8a4a2a;
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-block;
+      padding: 0.6rem 1.4rem;
+      font-family: Georgia, serif;
+      font-size: 1rem;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .btn-primary {
+      background: #1a3a4a;
+      color: #fff;
+    }
+
+    .btn-primary:hover {
+      background: #2a5a6a;
+    }
+
+    .btn-primary:disabled {
+      background: #999;
+      cursor: not-allowed;
+    }
+
+    .btn-claim {
+      background: #c4713b;
+      color: #fff;
+      font-size: 0.9rem;
+      padding: 0.4rem 1rem;
+    }
+
+    .btn-claim:hover {
+      background: #a85a2a;
+    }
+
+    .btn-claim:disabled {
+      background: #999;
+      cursor: not-allowed;
+    }
+
+    .save-bar {
+      position: sticky;
+      bottom: 0;
+      background: #fff;
+      border-top: 1px solid #d4cfc7;
+      padding: 1rem 1.5rem;
+      text-align: center;
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.06);
+    }
+
+    .save-bar .btn {
+      min-width: 200px;
+    }
+
+    /* Messages */
+    .message {
+      padding: 0.8rem 1rem;
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      font-size: 0.95rem;
+    }
+
+    .message-success {
+      background: #e8f5e8;
+      color: #2a5a2a;
+      border: 1px solid #a8c8a8;
+    }
+
+    .message-error {
+      background: #fde8e8;
+      color: #8a2a2a;
+      border: 1px solid #d4a8a8;
+    }
+
+    .message-info {
+      background: #e8eef5;
+      color: #2a3a5a;
+      border: 1px solid #a8b8d4;
+    }
+
+    /* Loading */
+    .loading {
+      text-align: center;
+      padding: 3rem;
+      color: #888;
+      font-style: italic;
+    }
+
+    .section { margin-bottom: 2rem; }
+
+    .empty-state {
+      text-align: center;
+      color: #999;
+      padding: 1.5rem;
+      font-style: italic;
+    }
+
+    /* Responsive */
+    @media (max-width: 600px) {
+      header h1 { font-size: 1.4rem; }
+      .container { padding: 1rem; }
+      .slot-card { flex-wrap: wrap; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>CMOA Docent Tour Scheduling</h1>
+  <p>Sign up for tours, view assignments, and claim openings</p>
+</header>
+
+<div class="container" id="app">
+  <div class="loading" id="loading">Loading schedule...</div>
+</div>
+
+<script>
+// ============================================================
+// CONFIGURATION - paste your Apps Script web app URL here
+// ============================================================
+const WEB_APP_URL = 'PASTE_YOUR_WEB_APP_URL_HERE';
+
+// ============================================================
+// STATE
+// ============================================================
+let currentDocent = '';
+let allSlots = [];
+let allDocents = [];
+let selectedSlots = new Set();
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', loadData);
+
+async function loadData() {
+  try {
+    const resp = await fetch(WEB_APP_URL);
+    const data = await resp.json();
+    allDocents = data.docents || [];
+    allSlots = data.slots || [];
+    render();
+  } catch (err) {
+    document.getElementById('app').innerHTML =
+      '<div class="message message-error">Could not load schedule. Please try refreshing the page.</div>';
+  }
+}
+
+// ============================================================
+// RENDER
+// ============================================================
+function render() {
+  const app = document.getElementById('app');
+
+  // Separate slots by status
+  const openSlots = allSlots.filter(s => s.status === '' || s.status === 'Open');
+  const cancelledSlots = allSlots.filter(s => s.status === 'Cancelled');
+  const assignedSlots = allSlots.filter(s => s.status === 'Assigned');
+
+  // If docent is selected, figure out which slots they already signed up for
+  if (currentDocent) {
+    selectedSlots = new Set();
+    openSlots.forEach(s => {
+      if (s.signups.indexOf(currentDocent) !== -1) {
+        selectedSlots.add(s.slotId);
+      }
+    });
+  }
+
+  let html = '';
+
+  // Docent selector
+  html += '<div class="docent-selector">';
+  html += '<label for="docent-select">Who are you?</label>';
+  html += '<select id="docent-select" onchange="selectDocent(this.value)">';
+  html += '<option value="">-- Pick your name --</option>';
+  allDocents.forEach(name => {
+    const sel = name === currentDocent ? ' selected' : '';
+    html += '<option value="' + escapeHtml(name) + '"' + sel + '>' + escapeHtml(name) + '</option>';
+  });
+  html += '</select></div>';
+
+  if (!currentDocent) {
+    html += '<div class="message message-info">Pick your name above to sign up for tours or claim openings.</div>';
+    app.innerHTML = html;
+    return;
+  }
+
+  // Message area
+  html += '<div id="message-area"></div>';
+
+  // --- Open slots (sign up) ---
+  html += '<div class="section">';
+  html += '<h2 class="section-title">Available Tours — Check the ones you can do</h2>';
+  if (openSlots.length === 0) {
+    html += '<div class="empty-state">No open tours right now. Check back soon.</div>';
+  } else {
+    openSlots.forEach(slot => {
+      const checked = selectedSlots.has(slot.slotId) ? ' checked' : '';
+      const signupCount = slot.signups.length;
+      html += '<div class="slot-card">';
+      html += '<input type="checkbox" id="slot-' + slot.slotId + '" value="' + slot.slotId + '"' + checked + ' onchange="toggleSlot(this)">';
+      html += '<div class="slot-info">';
+      html += '<div class="slot-tour">' + escapeHtml(slot.tourType) + '</div>';
+      html += '<div class="slot-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.time) + '</div>';
+      html += '<div class="slot-meta">Needs ' + slot.docentsNeeded + ' docent' + (slot.docentsNeeded > 1 ? 's' : '') +
+              ' &middot; ' + signupCount + ' signed up so far</div>';
+      html += '</div>';
+      html += '<span class="slot-status status-open">Open</span>';
+      html += '</div>';
+    });
+  }
+  html += '</div>';
+
+  // --- Cancelled slots (claim) ---
+  if (cancelledSlots.length > 0) {
+    html += '<div class="section">';
+    html += '<h2 class="section-title">Open Cancellations — Claim a Spot</h2>';
+    cancelledSlots.forEach(slot => {
+      html += '<div class="slot-card cancelled">';
+      html += '<div class="slot-info">';
+      html += '<div class="slot-tour">' + escapeHtml(slot.tourType) + '</div>';
+      html += '<div class="slot-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.time) + '</div>';
+      html += '</div>';
+      html += '<button class="btn btn-claim" onclick="claimSlot(\'' + slot.slotId + '\', this)">Claim This Tour</button>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // --- Your assigned tours ---
+  const myTours = assignedSlots.filter(s => s.assigned.indexOf(currentDocent) !== -1);
+  if (myTours.length > 0) {
+    html += '<div class="section">';
+    html += '<h2 class="section-title">Your Assigned Tours</h2>';
+    myTours.forEach(slot => {
+      html += '<div class="slot-card assigned">';
+      html += '<div class="slot-info">';
+      html += '<div class="slot-tour">' + escapeHtml(slot.tourType) + '</div>';
+      html += '<div class="slot-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.time) + '</div>';
+      html += '<div class="slot-meta">Check your calendar for reminders</div>';
+      html += '</div>';
+      html += '<span class="slot-status status-assigned">Assigned to you</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // --- All other assigned tours ---
+  const otherTours = assignedSlots.filter(s => s.assigned.indexOf(currentDocent) === -1);
+  if (otherTours.length > 0) {
+    html += '<div class="section">';
+    html += '<h2 class="section-title">Other Assigned Tours</h2>';
+    otherTours.forEach(slot => {
+      html += '<div class="slot-card assigned">';
+      html += '<div class="slot-info">';
+      html += '<div class="slot-tour">' + escapeHtml(slot.tourType) + '</div>';
+      html += '<div class="slot-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.time) + '</div>';
+      html += '<div class="slot-meta">Assigned to ' + escapeHtml(slot.assigned) + '</div>';
+      html += '</div>';
+      html += '<span class="slot-status status-assigned">Filled</span>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  app.innerHTML = html;
+
+  // Save bar (only if there are open slots)
+  if (openSlots.length > 0) {
+    let saveBar = document.getElementById('save-bar');
+    if (!saveBar) {
+      saveBar = document.createElement('div');
+      saveBar.id = 'save-bar';
+      saveBar.className = 'save-bar';
+      document.body.appendChild(saveBar);
+    }
+    saveBar.innerHTML = '<button class="btn btn-primary" id="save-btn" onclick="saveSignups()">Save My Availability</button>';
+    saveBar.style.display = 'block';
+  }
+}
+
+// ============================================================
+// ACTIONS
+// ============================================================
+function selectDocent(name) {
+  currentDocent = name;
+  render();
+}
+
+function toggleSlot(checkbox) {
+  if (checkbox.checked) {
+    selectedSlots.add(checkbox.value);
+  } else {
+    selectedSlots.delete(checkbox.value);
+  }
+}
+
+async function saveSignups() {
+  const btn = document.getElementById('save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  try {
+    const resp = await fetch(WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'signup',
+        docent: currentDocent,
+        slots: Array.from(selectedSlots)
+      })
+    });
+    const result = await resp.json();
+    if (result.ok) {
+      showMessage('Your availability has been saved.', 'success');
+      // Reload to reflect updated state
+      await loadData();
+    } else {
+      showMessage(result.error || 'Something went wrong. Please try again.', 'error');
+    }
+  } catch (err) {
+    showMessage('Could not save. Check your internet connection and try again.', 'error');
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Save My Availability';
+}
+
+async function claimSlot(slotId, button) {
+  if (!confirm('Claim this tour? You will receive a calendar invite.')) return;
+
+  button.disabled = true;
+  button.textContent = 'Claiming...';
+
+  try {
+    const resp = await fetch(WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'claim',
+        slot: slotId,
+        docent: currentDocent
+      })
+    });
+    const result = await resp.json();
+    if (result.ok !== undefined) {
+      showMessage('Tour claimed! A calendar invite is on its way.', 'success');
+      await loadData();
+    } else {
+      // The claim endpoint returns HTML for email links, JSON for site calls
+      // If we got here with JSON, something unexpected happened
+      showMessage('Could not claim. Someone may have gotten there first.', 'error');
+      await loadData();
+    }
+  } catch (err) {
+    showMessage('Could not claim. Please try again.', 'error');
+  }
+
+  button.disabled = false;
+  button.textContent = 'Claim This Tour';
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+function showMessage(text, type) {
+  const area = document.getElementById('message-area');
+  if (!area) return;
+  area.innerHTML = '<div class="message message-' + type + '">' + escapeHtml(text) + '</div>';
+  setTimeout(() => { area.innerHTML = ''; }, 5000);
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+</script>
+
+</body>
+</html>
