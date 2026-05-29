@@ -204,7 +204,7 @@ function handleClaim(slotId, docentName) {
       return HtmlService.createHtmlOutput('<h2>Slot not found.</h2>');
     }
 
-    if (schedData[slotRow][5].toString() !== 'Cancelled') {
+    if (schedData[slotRow][5].toString() !== 'Needs Sub') {
       return HtmlService.createHtmlOutput(
         '<h2>Already claimed</h2><p>Someone else got there first. Thanks for trying!</p>');
     }
@@ -280,7 +280,7 @@ function handleClaimJSON(slotId, docentName) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    if (schedData[slotRow][5].toString() !== 'Cancelled') {
+    if (schedData[slotRow][5].toString() !== 'Needs Sub') {
       return ContentService.createTextOutput(JSON.stringify({ error: 'Already claimed. Someone else got there first.' }))
         .setMimeType(ContentService.MimeType.JSON);
     }
@@ -449,7 +449,7 @@ function runAutoAssignment() {
 }
 
 // =====================
-// INSTANT CANCELLATION (installable onEdit trigger)
+// INSTANT STATUS CHANGE (installable onEdit trigger)
 // =====================
 function onEditInstallable(e) {
   var sheet = e.source.getActiveSheet();
@@ -463,10 +463,60 @@ function onEditInstallable(e) {
   if (col !== 6 || row <= 1) return;
 
   var newValue = (e.value || '').toString();
-  if (newValue !== 'Cancelled') return;
 
-  var ss = e.source;
-  var schedSheet = sheet;
+  if (newValue === 'Tour Cancelled') {
+    handleTourCancelled(e.source, sheet, row);
+  } else if (newValue === 'Needs Sub') {
+    handleNeedsSub(e.source, sheet, row);
+  }
+}
+
+// The whole tour is cancelled. Notify assigned docents they don't need to come.
+function handleTourCancelled(ss, schedSheet, row) {
+  var docentSheet = ss.getSheetByName(SHEET_DOCENTS);
+
+  var schedData = schedSheet.getRange(row, 1, 1, 7).getValues()[0];
+  var tourType = schedData[3].toString();
+  var date = new Date(schedData[1]);
+  var time = schedData[2].toString();
+  var originallyAssigned = schedData[6].toString();
+
+  var docentData = docentSheet.getDataRange().getValues();
+  var emailMap = {};
+  for (var i = 1; i < docentData.length; i++) {
+    if (docentData[i][0]) emailMap[docentData[i][0].toString()] = docentData[i][1].toString();
+  }
+
+  var assignedList = originallyAssigned.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+
+  for (var i = 0; i < assignedList.length; i++) {
+    var name = assignedList[i];
+    var email = emailMap[name];
+    if (!email) continue;
+    MailApp.sendEmail(
+      email,
+      'Tour cancelled: ' + tourType + ' on ' + formatDateNice(date),
+      'Hi ' + name + ',\n\n' +
+      'The ' + tourType + ' tour on ' + formatDateNice(date) + ' at ' + time +
+      ' has been cancelled. You do not need to come.\n\n' +
+      '-- Tour Scheduler'
+    );
+
+    // Decrement their quarterly count since they won't be doing this tour
+    for (var j = 1; j < docentData.length; j++) {
+      if (docentData[j][0].toString() === name) {
+        var currentCount = docentData[j][2] || 0;
+        if (currentCount > 0) {
+          docentSheet.getRange(j + 1, 3).setValue(currentCount - 1);
+        }
+        break;
+      }
+    }
+  }
+}
+
+// A docent dropped out. Tour still happening. Blast backups + weekday regulars.
+function handleNeedsSub(ss, schedSheet, row) {
   var docentSheet = ss.getSheetByName(SHEET_DOCENTS);
   var signupSheet = ss.getSheetByName(SHEET_SIGNUPS);
   var cancelSheet = ss.getSheetByName(SHEET_CANCELLATIONS);
@@ -520,10 +570,9 @@ function onEditInstallable(e) {
 
   // Tier 2: Email docents who tend to be free on this day of the week
   // but didn't sign up for this specific slot
-  var cancelledDay = date.getDay(); // 0=Sun, 1=Mon, etc.
+  var cancelledDay = date.getDay();
   var schedAllData = schedSheet.getDataRange().getValues();
 
-  // Build a map of slotId -> day of week from the schedule
   var slotDayMap = {};
   for (var i = 1; i < schedAllData.length; i++) {
     var sid = (schedAllData[i][0] || '').toString();
@@ -531,7 +580,6 @@ function onEditInstallable(e) {
     if (!isNaN(sdate.getTime())) slotDayMap[sid] = sdate.getDay();
   }
 
-  // Count how many times each docent has signed up for this weekday
   var weekdayCounts = {};
   for (var i = 1; i < signupData.length; i++) {
     var dName = (signupData[i][1] || '').toString();
@@ -541,12 +589,10 @@ function onEditInstallable(e) {
     }
   }
 
-  // Already contacted: backups + originally assigned
   var alreadyContacted = {};
   for (var i = 0; i < backups.length; i++) alreadyContacted[backups[i]] = true;
   for (var i = 0; i < assignedList.length; i++) alreadyContacted[assignedList[i]] = true;
 
-  // Email weekday regulars (signed up for this weekday 2+ times before)
   var MIN_WEEKDAY_SIGNUPS = 2;
   for (var name in weekdayCounts) {
     if (alreadyContacted[name]) continue;
@@ -580,7 +626,7 @@ function onEditInstallable(e) {
     MailApp.sendEmail(
       KATHY_EMAIL,
       'No backups available: ' + tourType + ' on ' + formatDateNice(date),
-      'A tour was cancelled but nobody else signed up for this slot and no ' +
+      'A docent dropped out but nobody else signed up for this slot and no ' +
       dayName(cancelledDay) + ' regulars were found.\n\n' +
       'Slot: ' + slotId + '\nTour: ' + tourType + '\nDate: ' + formatDateNice(date) +
       '\nTime: ' + time + '\n\nPlease assign manually.'

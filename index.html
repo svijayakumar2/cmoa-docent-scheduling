@@ -313,7 +313,7 @@ function render() {
 
   // Separate slots by status
   const openSlots = allSlots.filter(s => s.status === '' || s.status === 'Open');
-  const cancelledSlots = allSlots.filter(s => s.status === 'Cancelled');
+  const cancelledSlots = allSlots.filter(s => s.status === 'Needs Sub');
   const assignedSlots = allSlots.filter(s => s.status === 'Assigned');
 
   // If docent is selected, figure out which slots they already signed up for
@@ -374,7 +374,7 @@ function render() {
   // --- Cancelled slots (claim) ---
   if (cancelledSlots.length > 0) {
     html += '<div class="section">';
-    html += '<h2 class="section-title">Open Cancellations — Claim a Spot</h2>';
+    html += '<h2 class="section-title">Needs a Sub — Claim a Spot</h2>';
     cancelledSlots.forEach(slot => {
       html += '<div class="slot-card cancelled">';
       html += '<div class="slot-info">';
