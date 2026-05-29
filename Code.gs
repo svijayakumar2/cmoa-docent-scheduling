@@ -7,6 +7,8 @@ const SHEET_SCHEDULE   = 'Schedule';
 const SHEET_DOCENTS    = 'Docents';
 const SHEET_SIGNUPS    = 'Signups';
 const SHEET_CANCELLATIONS = 'Cancellations';
+const BACKUP_FOLDER_NAME  = 'CMOA Backups';
+const BACKUP_KEEP_DAYS    = 30;
 
 // =====================
 // MENU
@@ -17,6 +19,7 @@ function onOpen() {
     .addItem('Run Auto-Assignment Now', 'runAutoAssignment')
     .addItem('Send Reminders Now', 'sendReminders')
     .addItem('Check Expired Claims', 'checkExpiredClaims')
+    .addItem('Backup Now', 'dailyBackup')
     .addToUi();
 }
 
@@ -859,4 +862,29 @@ function formatTime(val) {
     return Utilities.formatDate(val, Session.getScriptTimeZone(), 'h:mm a');
   }
   return val.toString();
+}
+
+// =====================
+// DAILY BACKUP
+// =====================
+function dailyBackup() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var folders = DriveApp.getFoldersByName(BACKUP_FOLDER_NAME);
+  var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(BACKUP_FOLDER_NAME);
+
+  // Create a dated copy
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var copyName = ss.getName() + ' - Backup ' + today;
+  DriveApp.getFileById(ss.getId()).makeCopy(copyName, folder);
+
+  // Delete backups older than BACKUP_KEEP_DAYS
+  var cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - BACKUP_KEEP_DAYS);
+  var files = folder.getFiles();
+  while (files.hasNext()) {
+    var file = files.next();
+    if (file.getDateCreated() < cutoff) {
+      file.setTrashed(true);
+    }
+  }
 }
