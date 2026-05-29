@@ -132,7 +132,18 @@ function handleSignup(docentName, slotIds) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var signupSheet = ss.getSheetByName(SHEET_SIGNUPS);
+    var schedSheet = ss.getSheetByName(SHEET_SCHEDULE);
     var signupData = signupSheet.getDataRange().getValues();
+    var schedData = schedSheet.getDataRange().getValues();
+
+    // Build a set of slot IDs that are still Open (the ones docents can see/toggle)
+    var openSlots = {};
+    for (var i = 1; i < schedData.length; i++) {
+      var status = (schedData[i][5] || '').toString();
+      if (status === '' || status === 'Open') {
+        openSlots[(schedData[i][0] || '').toString()] = true;
+      }
+    }
 
     // Find existing signups for this docent
     var existing = {};
@@ -151,13 +162,14 @@ function handleSignup(docentName, slotIds) {
       }
     }
 
-    // Remove unchecked signups (docent deselected a slot they previously signed up for)
+    // Only remove signups for Open slots that the docent deselected.
+    // Never touch signups for Assigned/Needs Sub slots.
     var slotSet = {};
     for (var j = 0; j < slotIds.length; j++) slotSet[slotIds[j]] = true;
 
     var rowsToDelete = [];
     for (var s in existing) {
-      if (!slotSet[s]) {
+      if (!slotSet[s] && openSlots[s]) {
         rowsToDelete.push(existing[s]);
       }
     }
