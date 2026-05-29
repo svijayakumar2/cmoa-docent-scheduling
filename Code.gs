@@ -410,18 +410,65 @@ function runAutoAssignment() {
 
     var signups = signupMap[slotId] || [];
 
-    // If nobody signed up, email weekday regulars to drum up interest
-    if (signups.length === 0) {
+    // Sort by lowest quarterly count (fair rotation)
+    // Filter out anyone who already has a conflicting assignment on this day
+    var eligible = signups.filter(function(n) {
+      if (!tally[n]) return false;
+      var key = n + '|' + slotDateKey;
+      var existing = assignedTimes[key] || [];
+      for (var k = 0; k < existing.length; k++) {
+        if (slotStart < existing[k][1] && slotEnd > existing[k][0]) return false;
+      }
+      return true;
+    });
+    eligible.sort(function(a, b) { return tally[a].count - tally[b].count; });
+
+    var assigned = eligible.slice(0, docentsNeeded);
+    var spotsRemaining = docentsNeeded - assigned.length;
+
+    // If we have at least some people, assign them
+    if (assigned.length > 0) {
+      schedSheet.getRange(i + 1, 6).setValue('Assigned');
+      schedSheet.getRange(i + 1, 7).setValue(assigned.join(', '));
+
+      for (var j = 0; j < assigned.length; j++) {
+        var name = assigned[j];
+        tally[name].count += 1;
+        docentSheet.getRange(tally[name].row, 3).setValue(tally[name].count);
+        sendCalendarInvite(tally[name].email, name, slotId, date, timeRaw, tourType);
+
+        var key = name + '|' + slotDateKey;
+        if (!assignedTimes[key]) assignedTimes[key] = [];
+        assignedTimes[key].push([slotStart, slotEnd]);
+      }
+
+      // Notify docents who signed up but weren't assigned
+      var notAssigned = signups.filter(function(n) { return assigned.indexOf(n) === -1; });
+      for (var j = 0; j < notAssigned.length; j++) {
+        var name = notAssigned[j];
+        if (!tally[name]) continue;
+        MailApp.sendEmail(
+          tally[name].email,
+          'Tour assignment update: ' + tourType + ' on ' + formatDateNice(date),
+          'Hi ' + name + ',\n\n' +
+          'The ' + tourType + ' tour on ' + formatDateNice(date) + ' at ' + time +
+          ' has been assigned to ' + assigned.join(' and ') + '.\n\n' +
+          'Thanks for signing up as available. You remain on the backup list if the assigned docent cancels.\n\n' +
+          '-- Tour Scheduler'
+        );
+      }
+    }
+
+    // If we still need more docents (partial fill or zero signups), email weekday regulars
+    if (spotsRemaining > 0) {
       var slotDay = date.getDay();
 
-      // Build slotId -> day-of-week map from schedule
       var slotDayMap = {};
       for (var k = 1; k < schedData.length; k++) {
         var sd = new Date(schedData[k][1]);
         if (!isNaN(sd.getTime())) slotDayMap[(schedData[k][0] || '').toString()] = sd.getDay();
       }
 
-      // Count each docent's signups on this weekday
       var weekdayCounts = {};
       for (var k = 1; k < signupData.length; k++) {
         var dName = (signupData[k][1] || '').toString();
@@ -431,72 +478,41 @@ function runAutoAssignment() {
         }
       }
 
-      var MIN_WEEKDAY_SIGNUPS = 2;
+      // Don't email people already assigned or who signed up for this slot
+      var alreadyInvolved = {};
+      for (var j = 0; j < signups.length; j++) alreadyInvolved[signups[j]] = true;
+      for (var j = 0; j < assigned.length; j++) alreadyInvolved[assigned[j]] = true;
+
+      var regularsContacted = false;
       for (var name in weekdayCounts) {
+        if (alreadyInvolved[name]) continue;
         if (weekdayCounts[name] < MIN_WEEKDAY_SIGNUPS) continue;
         if (!tally[name]) continue;
         MailApp.sendEmail(
           tally[name].email,
           'Tour needs you: ' + tourType + ' on ' + formatDateNice(date),
           'Hi ' + name + ',\n\n' +
-          'We still need someone for the ' + tourType + ' tour on ' +
+          'We still need ' + spotsRemaining + ' more docent' + (spotsRemaining > 1 ? 's' : '') +
+          ' for the ' + tourType + ' tour on ' +
           formatDateNice(date) + ' at ' + time + '.\n\n' +
           'You often sign up for ' + dayName(slotDay) + ' tours. ' +
           'If you can help, visit the scheduling site and check this slot.\n\n' +
           '-- Tour Scheduler'
         );
+        regularsContacted = true;
       }
-      continue;
-    }
 
-    // Sort by lowest quarterly count (fair rotation)
-    // Filter out anyone who already has a conflicting assignment on this day
-    var eligible = signups.filter(function(n) {
-      if (!tally[n]) return false;
-      var key = n + '|' + slotDateKey;
-      var existing = assignedTimes[key] || [];
-      for (var k = 0; k < existing.length; k++) {
-        // Overlaps if one starts before the other ends and vice versa
-        if (slotStart < existing[k][1] && slotEnd > existing[k][0]) return false;
+      // If nobody was available at all, email Kathy
+      if (assigned.length === 0 && !regularsContacted) {
+        MailApp.sendEmail(
+          KATHY_EMAIL,
+          'No docents available: ' + tourType + ' on ' + formatDateNice(date),
+          'Nobody signed up for the ' + tourType + ' tour on ' +
+          formatDateNice(date) + ' at ' + time +
+          ' and no ' + dayName(date.getDay()) + ' regulars were found.\n\n' +
+          'Slot: ' + slotId + '\n-- Tour Scheduler'
+        );
       }
-      return true;
-    });
-    eligible.sort(function(a, b) { return tally[a].count - tally[b].count; });
-
-    var assigned = eligible.slice(0, docentsNeeded);
-    if (assigned.length === 0) continue;
-
-    // Update the schedule
-    schedSheet.getRange(i + 1, 6).setValue('Assigned');  // Status
-    schedSheet.getRange(i + 1, 7).setValue(assigned.join(', '));  // Assigned Docents
-
-    // Update tallies, send calendar invites, and track the new assignment
-    for (var j = 0; j < assigned.length; j++) {
-      var name = assigned[j];
-      tally[name].count += 1;
-      docentSheet.getRange(tally[name].row, 3).setValue(tally[name].count);
-      sendCalendarInvite(tally[name].email, name, slotId, date, timeRaw, tourType);
-
-      // Record this assignment so subsequent slots in the loop won't overlap
-      var key = name + '|' + slotDateKey;
-      if (!assignedTimes[key]) assignedTimes[key] = [];
-      assignedTimes[key].push([slotStart, slotEnd]);
-    }
-
-    // Notify docents who signed up but weren't assigned
-    var notAssigned = signups.filter(function(n) { return assigned.indexOf(n) === -1; });
-    for (var j = 0; j < notAssigned.length; j++) {
-      var name = notAssigned[j];
-      if (!tally[name]) continue;
-      MailApp.sendEmail(
-        tally[name].email,
-        'Tour assignment update: ' + tourType + ' on ' + formatDateNice(date),
-        'Hi ' + name + ',\n\n' +
-        'The ' + tourType + ' tour on ' + formatDateNice(date) + ' at ' + time +
-        ' has been assigned to ' + assigned.join(' and ') + '.\n\n' +
-        'Thanks for signing up as available. You remain on the backup list if the assigned docent cancels.\n\n' +
-        '-- Tour Scheduler'
-      );
     }
   }
 }
