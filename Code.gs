@@ -102,7 +102,7 @@ function buildSchedulePayload() {
       slotId: slotId,
       date: formatDateISO(date),
       dateDisplay: formatDateNice(date),
-      time: (row[2] || '').toString(),
+      time: formatTime(row[2]),
       tourType: (row[3] || '').toString(),
       docentsNeeded: row[4] || 1,
       status: status,
@@ -791,4 +791,13 @@ function formatDateISO(date) {
 
 function dayName(dayNum) {
   return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dayNum];
+}
+
+function formatTime(val) {
+  if (!val) return '';
+  // If Sheets stored it as a Date object, format it nicely
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'h:mm a');
+  }
+  return val.toString();
 }
