@@ -2,6 +2,7 @@
 const KATHY_EMAIL = 'CHANGE_THIS@example.com';
 const CLAIM_WINDOW_DAYS = 5;
 const AUTO_ASSIGN_DAYS_OUT = 21;
+const MIN_WEEKDAY_SIGNUPS = 2;
 
 const SHEET_SCHEDULE   = 'Schedule';
 const SHEET_DOCENTS    = 'Docents';
@@ -688,7 +689,6 @@ function handleNeedsSub(ss, schedSheet, row) {
   for (var i = 0; i < backups.length; i++) alreadyContacted[backups[i]] = true;
   for (var i = 0; i < assignedList.length; i++) alreadyContacted[assignedList[i]] = true;
 
-  var MIN_WEEKDAY_SIGNUPS = 2;
   for (var name in weekdayCounts) {
     if (alreadyContacted[name]) continue;
     if (weekdayCounts[name] < MIN_WEEKDAY_SIGNUPS) continue;
