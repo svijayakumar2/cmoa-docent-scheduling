@@ -345,14 +345,20 @@ function runAutoAssignment() {
   var signupData = signupSheet.getDataRange().getValues();
 
   // Build docent tally
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
   var tally = {};
   for (var i = 1; i < docentData.length; i++) {
     var name = (docentData[i][0] || '').toString();
     if (!name) continue;
+    var unavailUntil = docentData[i][3] ? new Date(docentData[i][3]) : null;
+    var certRaw = (docentData[i][4] || '').toString().trim();
     tally[name] = {
       email: docentData[i][1],
       count: docentData[i][2] || 0,
-      row: i + 1
+      row: i + 1,
+      unavailable: unavailUntil && unavailUntil >= today,
+      certifiedTours: certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null
     };
   }
 
@@ -414,6 +420,8 @@ function runAutoAssignment() {
     // Filter out anyone who already has a conflicting assignment on this day
     var eligible = signups.filter(function(n) {
       if (!tally[n]) return false;
+      if (tally[n].unavailable) return false;
+      if (!isCertifiedFor(tally[n], tourType)) return false;
       var key = n + '|' + slotDateKey;
       var existing = assignedTimes[key] || [];
       for (var k = 0; k < existing.length; k++) {
@@ -488,6 +496,8 @@ function runAutoAssignment() {
         if (alreadyInvolved[name]) continue;
         if (weekdayCounts[name] < MIN_WEEKDAY_SIGNUPS) continue;
         if (!tally[name]) continue;
+        if (tally[name].unavailable) continue;
+        if (!isCertifiedFor(tally[name], tourType)) continue;
         MailApp.sendEmail(
           tally[name].email,
           'Tour needs you: ' + tourType + ' on ' + formatDateNice(date),
@@ -597,11 +607,22 @@ function handleNeedsSub(ss, schedSheet, row) {
   var time = formatTime(schedData[2]);
   var originallyAssigned = schedData[6].toString();
 
-  // Get all docent emails
+  // Get all docent emails and unavailability
   var docentData = docentSheet.getDataRange().getValues();
+  var today = new Date();
+  today.setHours(0, 0, 0, 0);
   var emailMap = {};
+  var unavailMap = {};
+  var certMap = {};
   for (var i = 1; i < docentData.length; i++) {
-    if (docentData[i][0]) emailMap[docentData[i][0].toString()] = docentData[i][1].toString();
+    if (docentData[i][0]) {
+      var dName = docentData[i][0].toString();
+      emailMap[dName] = docentData[i][1].toString();
+      var unavailUntil = docentData[i][3] ? new Date(docentData[i][3]) : null;
+      if (unavailUntil && unavailUntil >= today) unavailMap[dName] = true;
+      var certRaw = (docentData[i][4] || '').toString().trim();
+      certMap[dName] = certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null;
+    }
   }
 
   // Get signups for this slot
@@ -613,9 +634,14 @@ function handleNeedsSub(ss, schedSheet, row) {
     }
   }
 
-  // Eligible backups = signed up but not originally assigned
+  // Eligible backups = signed up but not originally assigned, not unavailable, and certified
   var assignedList = originallyAssigned.split(',').map(function(s) { return s.trim(); });
-  var backups = slotSignups.filter(function(n) { return assignedList.indexOf(n) === -1; });
+  var backups = slotSignups.filter(function(n) {
+    if (assignedList.indexOf(n) !== -1) return false;
+    if (unavailMap[n]) return false;
+    if (certMap[n] && !isCertifiedForRaw(certMap[n], tourType)) return false;
+    return true;
+  });
 
   var webAppUrl = ScriptApp.getService().getUrl();
 
@@ -666,6 +692,8 @@ function handleNeedsSub(ss, schedSheet, row) {
   for (var name in weekdayCounts) {
     if (alreadyContacted[name]) continue;
     if (weekdayCounts[name] < MIN_WEEKDAY_SIGNUPS) continue;
+    if (unavailMap[name]) continue;
+    if (certMap[name] && !isCertifiedForRaw(certMap[name], tourType)) continue;
     var email = emailMap[name];
     if (!email) continue;
     var claimUrl = webAppUrl + '?action=claim&slot=' + encodeURIComponent(slotId) +
@@ -869,6 +897,32 @@ function formatDateISO(date) {
 
 function dayName(dayNum) {
   return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dayNum];
+}
+
+// Check if a docent (from tally) is certified for a tour type.
+// If certifiedTours is null (column blank), they're eligible for everything.
+// Kathy enters comma-separated tags in the Certified Tours column, e.g. "PC, CI, MM"
+// Tags: PC = Permanent Collection, CI = Carnegie International, MM = Mindful Museum, CIA = CI Activation
+// The system maps each tour type to its required tag and checks if the docent has it.
+var TOUR_TAG_MAP = {
+  'permanent collection': 'pc',
+  'permanent collection evening': 'pc',
+  'carnegie international': 'ci',
+  'carnegie international evening': 'ci',
+  'ci activation tour': 'cia',
+  'mindful museum': 'mm'
+};
+
+function isCertifiedFor(docentInfo, tourType) {
+  if (!docentInfo.certifiedTours) return true;
+  return isCertifiedForRaw(docentInfo.certifiedTours, tourType);
+}
+
+function isCertifiedForRaw(certList, tourType) {
+  if (!certList) return true;
+  var requiredTag = TOUR_TAG_MAP[tourType.toLowerCase()];
+  if (!requiredTag) return true; // unknown tour type = no restriction
+  return certList.indexOf(requiredTag) !== -1;
 }
 
 function formatTime(val) {
