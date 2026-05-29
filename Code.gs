@@ -46,7 +46,7 @@ function doPost(e) {
   }
 
   if (action === 'claim') {
-    return handleClaim(payload.slot, payload.docent);
+    return handleClaimJSON(payload.slot, payload.docent);
   }
 
   return ContentService.createTextOutput(JSON.stringify({ error: 'Unknown action' }))
@@ -246,6 +246,71 @@ function handleClaim(slotId, docentName) {
       dateStr + ' at ' + time + '.</p>' +
       '<p>A calendar invite is on its way.</p>'
     );
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// Claim from the website (returns JSON instead of HTML)
+function handleClaimJSON(slotId, docentName) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return ContentService.createTextOutput(JSON.stringify({ error: 'Server busy, try again.' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var schedSheet = ss.getSheetByName(SHEET_SCHEDULE);
+    var cancelSheet = ss.getSheetByName(SHEET_CANCELLATIONS);
+    var docentSheet = ss.getSheetByName(SHEET_DOCENTS);
+
+    var schedData = schedSheet.getDataRange().getValues();
+    var cancelData = cancelSheet.getDataRange().getValues();
+    var docentData = docentSheet.getDataRange().getValues();
+
+    var slotRow = -1;
+    for (var i = 1; i < schedData.length; i++) {
+      if (schedData[i][0].toString() === slotId) { slotRow = i; break; }
+    }
+    if (slotRow === -1) {
+      return ContentService.createTextOutput(JSON.stringify({ error: 'Slot not found.' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (schedData[slotRow][5].toString() !== 'Cancelled') {
+      return ContentService.createTextOutput(JSON.stringify({ error: 'Already claimed. Someone else got there first.' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    schedSheet.getRange(slotRow + 1, 6).setValue('Assigned');
+    schedSheet.getRange(slotRow + 1, 7).setValue(docentName);
+
+    for (var i = 1; i < cancelData.length; i++) {
+      if (cancelData[i][0].toString() === slotId && cancelData[i][3] === 'Broadcast') {
+        cancelSheet.getRange(i + 1, 4).setValue('Claimed');
+        cancelSheet.getRange(i + 1, 5).setValue(docentName);
+        break;
+      }
+    }
+
+    for (var i = 1; i < docentData.length; i++) {
+      if (docentData[i][0] === docentName) {
+        sendCalendarInvite(
+          docentData[i][1], docentName, slotId,
+          new Date(schedData[slotRow][1]),
+          schedData[slotRow][2].toString(),
+          schedData[slotRow][3].toString()
+        );
+        docentSheet.getRange(i + 1, 3).setValue((docentData[i][2] || 0) + 1);
+        break;
+      }
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
   }

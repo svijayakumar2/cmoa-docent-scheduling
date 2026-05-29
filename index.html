@@ -503,13 +503,11 @@ async function claimSlot(slotId, button) {
       })
     });
     const result = await resp.json();
-    if (result.ok !== undefined) {
+    if (result.ok) {
       showMessage('Tour claimed! A calendar invite is on its way.', 'success');
       await loadData();
     } else {
-      // The claim endpoint returns HTML for email links, JSON for site calls
-      // If we got here with JSON, something unexpected happened
-      showMessage('Could not claim. Someone may have gotten there first.', 'error');
+      showMessage(result.error || 'Could not claim. Someone may have gotten there first.', 'error');
       await loadData();
     }
   } catch (err) {
