@@ -228,7 +228,7 @@ function handleClaim(slotId, docentName) {
         sendCalendarInvite(
           docentData[i][1], docentName, slotId,
           new Date(schedData[slotRow][1]),
-          schedData[slotRow][2].toString(),
+          schedData[slotRow][2],
           schedData[slotRow][3].toString()
         );
         docentSheet.getRange(i + 1, 3).setValue((docentData[i][2] || 0) + 1);
@@ -301,7 +301,7 @@ function handleClaimJSON(slotId, docentName) {
         sendCalendarInvite(
           docentData[i][1], docentName, slotId,
           new Date(schedData[slotRow][1]),
-          schedData[slotRow][2].toString(),
+          schedData[slotRow][2],
           schedData[slotRow][3].toString()
         );
         docentSheet.getRange(i + 1, 3).setValue((docentData[i][2] || 0) + 1);
@@ -361,7 +361,8 @@ function runAutoAssignment() {
     var row = schedData[i];
     var slotId = (row[0] || '').toString();
     var date = new Date(row[1]);
-    var time = (row[2] || '').toString();
+    var timeRaw = row[2];
+    var time = formatTime(timeRaw);
     var tourType = (row[3] || '').toString();
     var docentsNeeded = row[4] || 1;
     var status = (row[5] || '').toString();
@@ -427,7 +428,7 @@ function runAutoAssignment() {
       var name = assigned[j];
       tally[name].count += 1;
       docentSheet.getRange(tally[name].row, 3).setValue(tally[name].count);
-      sendCalendarInvite(tally[name].email, name, slotId, date, time, tourType);
+      sendCalendarInvite(tally[name].email, name, slotId, date, timeRaw, tourType);
     }
 
     // Notify docents who signed up but weren't assigned
@@ -478,7 +479,7 @@ function handleTourCancelled(ss, schedSheet, row) {
   var schedData = schedSheet.getRange(row, 1, 1, 7).getValues()[0];
   var tourType = schedData[3].toString();
   var date = new Date(schedData[1]);
-  var time = schedData[2].toString();
+  var time = formatTime(schedData[2]);
   var originallyAssigned = schedData[6].toString();
 
   var docentData = docentSheet.getDataRange().getValues();
@@ -525,7 +526,7 @@ function handleNeedsSub(ss, schedSheet, row) {
   var slotId = schedData[0].toString();
   var tourType = schedData[3].toString();
   var date = new Date(schedData[1]);
-  var time = schedData[2].toString();
+  var time = formatTime(schedData[2]);
   var originallyAssigned = schedData[6].toString();
 
   // Get all docent emails
@@ -680,7 +681,7 @@ function sendReminders() {
         'Reminder: ' + row[3] + ' tour in ' + window,
         'Hi ' + name + ',\n\n' +
         'Reminder that you are leading the ' + row[3] + ' tour on ' +
-        formatDateNice(date) + ' at ' + row[2] + '. This is in ' + window + '.\n\n' +
+        formatDateNice(date) + ' at ' + formatTime(row[2]) + '. This is in ' + window + '.\n\n' +
         'If you have a conflict, contact Kathy as soon as possible.\n\n' +
         '-- Tour Scheduler'
       );
@@ -721,7 +722,7 @@ function checkExpiredClaims() {
           'Slot: ' + slotId + '\n' +
           'Tour: ' + schedData[j][3] + '\n' +
           'Date: ' + formatDateNice(new Date(schedData[j][1])) + '\n' +
-          'Time: ' + schedData[j][2] + '\n\n' +
+          'Time: ' + formatTime(schedData[j][2]) + '\n\n' +
           'Please assign manually.'
         );
         cancelSheet.getRange(i + 1, 4).setValue('Escalated');
@@ -750,10 +751,19 @@ function sendCalendarInvite(email, name, slotId, date, timeStr, tourType) {
   );
 }
 
-function parseTimeRange(timeStr, date) {
+function parseTimeRange(timeVal, date) {
   var start = new Date(date);
   start.setHours(13, 0, 0, 0); // default 1pm
-  var match = timeStr.toString().match(/(\d+)(?::(\d+))?\s*(AM|PM)?/i);
+
+  // If Sheets gave us a Date object, just pull hours/minutes directly
+  if (timeVal instanceof Date) {
+    start.setHours(timeVal.getHours(), timeVal.getMinutes(), 0, 0);
+    var end = new Date(start.getTime() + 3600000);
+    return [start, end];
+  }
+
+  var timeStr = (timeVal || '').toString();
+  var match = timeStr.match(/(\d+)(?::(\d+))?\s*(AM|PM)?/i);
   if (match) {
     var hour = parseInt(match[1]);
     var minute = parseInt(match[2] || '0');
@@ -762,7 +772,7 @@ function parseTimeRange(timeStr, date) {
     if (ampm === 'AM' && hour === 12) hour = 0;
     start.setHours(hour, minute, 0, 0);
   }
-  var end = new Date(start.getTime() + 3600000); // 1 hour
+  var end = new Date(start.getTime() + 3600000);
   return [start, end];
 }
 
