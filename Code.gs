@@ -351,8 +351,8 @@ function runAutoAssignment() {
   for (var i = 1; i < docentData.length; i++) {
     var name = (docentData[i][0] || '').toString();
     if (!name) continue;
-    var unavailUntil = docentData[i][3] ? new Date(docentData[i][3]) : null;
-    var certRaw = (docentData[i][4] || '').toString().trim();
+    var unavailUntil = docentData[i][4] ? new Date(docentData[i][4]) : null;
+    var certRaw = (docentData[i][5] || '').toString().trim();
     tally[name] = {
       email: docentData[i][1],
       count: docentData[i][2] || 0,
@@ -618,9 +618,9 @@ function handleNeedsSub(ss, schedSheet, row) {
     if (docentData[i][0]) {
       var dName = docentData[i][0].toString();
       emailMap[dName] = docentData[i][1].toString();
-      var unavailUntil = docentData[i][3] ? new Date(docentData[i][3]) : null;
+      var unavailUntil = docentData[i][4] ? new Date(docentData[i][4]) : null;
       if (unavailUntil && unavailUntil >= today) unavailMap[dName] = true;
-      var certRaw = (docentData[i][4] || '').toString().trim();
+      var certRaw = (docentData[i][5] || '').toString().trim();
       certMap[dName] = certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null;
     }
   }
