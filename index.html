@@ -25,17 +25,7 @@
       gap: 0.75rem;
     }
 
-    header h1 {
-      font-size: 1.3rem;
-      font-weight: 600;
-      letter-spacing: 0.01em;
-    }
-
-    .header-controls {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
+    header h1 { font-size: 1.3rem; font-weight: 600; }
 
     .header-controls select {
       font-size: 0.95rem;
@@ -49,11 +39,7 @@
 
     .header-controls select option { color: #333; background: #fff; }
 
-    .container {
-      max-width: 960px;
-      margin: 0 auto;
-      padding: 1rem;
-    }
+    .container { max-width: 700px; margin: 0 auto; padding: 1rem; }
 
     /* Week navigation */
     .week-nav {
@@ -78,19 +64,10 @@
     }
 
     .week-nav button:hover { background: #eee; }
-
-    .week-nav .week-label {
-      font-weight: 600;
-      font-size: 1rem;
-      color: #1a3a4a;
-    }
+    .week-nav .week-label { font-weight: 600; font-size: 1rem; color: #1a3a4a; }
 
     /* Tabs */
-    .tabs {
-      display: flex;
-      gap: 2px;
-      margin-bottom: 1rem;
-    }
+    .tabs { display: flex; gap: 2px; margin-bottom: 1rem; }
 
     .tab {
       padding: 0.5rem 1rem;
@@ -124,81 +101,89 @@
       font-weight: 600;
     }
 
-    /* Calendar grid */
-    .calendar {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 1px;
-      background: #ddd;
-      border: 1px solid #ddd;
-      border-radius: 8px;
-      overflow: hidden;
+    /* Day sections */
+    .day-section {
+      margin-bottom: 0.75rem;
     }
 
-    .cal-header {
+    .day-header {
       background: #1a3a4a;
       color: #fff;
-      padding: 0.5rem;
-      text-align: center;
-      font-size: 0.8rem;
+      padding: 0.45rem 0.75rem;
+      border-radius: 6px 6px 0 0;
+      font-size: 0.9rem;
       font-weight: 600;
-      text-transform: uppercase;
     }
 
-    .cal-day {
+    .day-header.today { background: #2a6a3a; }
+
+    .day-body {
       background: #fff;
-      min-height: 120px;
-      padding: 0.4rem;
-      vertical-align: top;
+      border: 1px solid #ddd;
+      border-top: none;
+      border-radius: 0 0 6px 6px;
+      padding: 0.5rem;
     }
 
-    .cal-day.empty {
-      background: #f9f9f6;
+    .day-empty {
+      color: #bbb;
+      font-size: 0.85rem;
+      font-style: italic;
+      padding: 0.25rem 0.5rem;
     }
 
-    .cal-day.today {
-      background: #fffde8;
-    }
-
-    .cal-day-number {
-      font-size: 0.8rem;
-      font-weight: 600;
-      color: #999;
-      margin-bottom: 0.3rem;
-    }
-
-    .cal-day.today .cal-day-number { color: #1a3a4a; }
-
-    /* Tour pills inside calendar cells */
-    .tour-pill {
+    /* Tour rows */
+    .tour-row {
       display: flex;
       align-items: center;
-      gap: 0.3rem;
-      padding: 0.2rem 0.35rem;
-      margin-bottom: 2px;
+      gap: 0.5rem;
+      padding: 0.4rem 0.5rem;
       border-radius: 4px;
-      font-size: 0.7rem;
-      line-height: 1.3;
-      cursor: default;
+      margin-bottom: 2px;
+      font-size: 0.9rem;
     }
 
-    .tour-pill input[type="checkbox"] {
-      width: 13px;
-      height: 13px;
+    .tour-row:last-child { margin-bottom: 0; }
+
+    .tour-row input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
       margin: 0;
       accent-color: #1a3a4a;
       flex-shrink: 0;
     }
 
-    .tour-pill.open { background: #e8f0e8; color: #2a5a2a; }
-    .tour-pill.assigned-you { background: #c8e0c8; color: #1a4a1a; font-weight: 600; }
-    .tour-pill.assigned { background: #eee; color: #888; }
-    .tour-pill.needs-sub { background: #fde8d8; color: #8a4a2a; }
+    .tour-row.open { background: #f0f5f0; }
+    .tour-row.assigned-you { background: #d0e8d0; }
+    .tour-row.assigned { background: #f5f5f2; color: #999; }
+    .tour-row.needs-sub { background: #fde8d8; }
 
-    .tour-pill .pill-time { font-weight: 600; white-space: nowrap; }
-    .tour-pill .pill-type { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tour-time { font-weight: 600; min-width: 70px; flex-shrink: 0; }
+    .tour-type { flex: 1; }
+    .tour-tag {
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.15rem 0.45rem;
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+    .tag-you { background: #2a6a3a; color: #fff; }
+    .tag-filled { background: #ddd; color: #888; }
+    .tag-claim {
+      background: #c4713b;
+      color: #fff;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.15rem 0.45rem;
+      border-radius: 10px;
+    }
+    .tag-claim:hover { background: #a85a2a; }
+    .tag-signups { color: #999; font-size: 0.75rem; flex-shrink: 0; }
 
-    /* List view (for "Your Tours" and "Needs Sub" tabs) */
+    /* List cards */
     .list-card {
       background: #fff;
       border: 1px solid #ddd;
@@ -212,28 +197,17 @@
     }
 
     .list-card .lc-info { flex: 1; }
-    .list-card .lc-tour { font-weight: 600; color: #1a3a4a; font-size: 0.95rem; }
+    .list-card .lc-tour { font-weight: 600; color: #1a3a4a; }
     .list-card .lc-date { font-size: 0.9rem; color: #555; }
     .list-card .lc-meta { font-size: 0.8rem; color: #999; }
-
     .list-card.your-tour { border-left: 3px solid #3a8a3a; }
     .list-card.sub-needed { border-left: 3px solid #c4713b; }
 
     /* Buttons */
-    .btn {
-      display: inline-block;
-      padding: 0.45rem 1rem;
-      font-size: 0.9rem;
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      font-family: inherit;
-    }
-
+    .btn { display: inline-block; padding: 0.45rem 1rem; font-size: 0.9rem; border: none; border-radius: 4px; cursor: pointer; font-family: inherit; }
     .btn-primary { background: #1a3a4a; color: #fff; }
     .btn-primary:hover { background: #2a5a6a; }
     .btn-primary:disabled { background: #999; cursor: not-allowed; }
-
     .btn-claim { background: #c4713b; color: #fff; font-size: 0.85rem; padding: 0.35rem 0.8rem; }
     .btn-claim:hover { background: #a85a2a; }
     .btn-claim:disabled { background: #999; cursor: not-allowed; }
@@ -249,14 +223,7 @@
       z-index: 10;
     }
 
-    /* Messages */
-    .message {
-      padding: 0.7rem 1rem;
-      border-radius: 6px;
-      margin-bottom: 0.75rem;
-      font-size: 0.9rem;
-    }
-
+    .message { padding: 0.7rem 1rem; border-radius: 6px; margin-bottom: 0.75rem; font-size: 0.9rem; }
     .message-success { background: #e8f5e8; color: #2a5a2a; border: 1px solid #a8c8a8; }
     .message-error { background: #fde8e8; color: #8a2a2a; border: 1px solid #d4a8a8; }
     .message-info { background: #e8eef5; color: #2a3a5a; border: 1px solid #a8b8d4; }
@@ -264,14 +231,9 @@
     .loading { text-align: center; padding: 3rem; color: #888; font-style: italic; }
     .empty-state { text-align: center; color: #999; padding: 2rem; font-style: italic; }
 
-    @media (max-width: 700px) {
-      .calendar { grid-template-columns: 1fr; }
-      .cal-header { display: none; }
-      .cal-day { min-height: auto; padding: 0.5rem; }
-      .cal-day.empty { display: none; }
-      .cal-day-number { font-size: 0.9rem; }
-      .tour-pill { font-size: 0.8rem; padding: 0.3rem 0.5rem; }
+    @media (max-width: 600px) {
       header { flex-direction: column; align-items: flex-start; }
+      .header-controls select { width: 100%; }
     }
   </style>
 </head>
@@ -322,21 +284,47 @@ function dateKey(d) {
     String(dt.getDate()).padStart(2,'0');
 }
 
-function shortDay(d) {
-  return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date(d).getDay()];
-}
-
-function monthDay(d) {
-  const dt = new Date(d);
-  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  return months[dt.getMonth()] + ' ' + dt.getDate();
-}
+const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
 function fullDate(d) {
   const dt = new Date(d);
-  const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-  return days[dt.getDay()] + ', ' + months[dt.getMonth()] + ' ' + dt.getDate();
+  return DAY_NAMES[dt.getDay()] + ', ' + MONTH_NAMES[dt.getMonth()] + ' ' + dt.getDate();
+}
+
+function shortDate(d) {
+  const dt = new Date(d);
+  return SHORT_MONTHS[dt.getMonth()] + ' ' + dt.getDate();
+}
+
+// Fix the 1899 time format from Google Sheets
+function cleanTime(raw) {
+  if (!raw) return '';
+  const s = String(raw);
+  // If it's already clean like "11:00 AM", return it
+  if (/^\d{1,2}:\d{2}\s*(AM|PM)$/i.test(s.trim())) return s.trim();
+  // Parse the ugly "Sat Dec 30 1899 11:00:00 GMT..." format
+  const match = s.match(/(\d{1,2}):(\d{2}):\d{2}\s*GMT/);
+  if (match) {
+    let hour = parseInt(match[1]);
+    const min = match[2];
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    if (hour > 12) hour -= 12;
+    if (hour === 0) hour = 12;
+    return hour + ':' + min + ' ' + ampm;
+  }
+  // Try parsing as a date object
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) {
+    let hour = d.getHours();
+    const min = String(d.getMinutes()).padStart(2, '0');
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    if (hour > 12) hour -= 12;
+    if (hour === 0) hour = 12;
+    return hour + ':' + min + ' ' + ampm;
+  }
+  return s;
 }
 
 document.addEventListener('DOMContentLoaded', loadData);
@@ -348,7 +336,9 @@ async function loadData() {
     allDocents = data.docents || [];
     allSlots = data.slots || [];
 
-    // Populate the header dropdown
+    // Clean up time values on load
+    allSlots.forEach(s => { s.time = cleanTime(s.time); });
+
     const sel = document.getElementById('docent-select');
     sel.innerHTML = '<option value="">-- Pick your name --</option>';
     allDocents.forEach(name => {
@@ -375,13 +365,11 @@ function render() {
     return;
   }
 
-  // Categorize
   const openSlots = allSlots.filter(s => s.status === '' || s.status === 'Open');
   const needsSubSlots = allSlots.filter(s => s.status === 'Needs Sub');
   const assignedSlots = allSlots.filter(s => s.status === 'Assigned');
   const myTours = assignedSlots.filter(s => s.assigned.indexOf(currentDocent) !== -1);
 
-  // Restore selections
   selectedSlots = new Set();
   openSlots.forEach(s => {
     if (s.signups.indexOf(currentDocent) !== -1) selectedSlots.add(s.slotId);
@@ -391,7 +379,7 @@ function render() {
 
   // Tabs
   html += '<div class="tabs">';
-  html += '<div class="tab' + (activeTab === 'calendar' ? ' active' : '') + '" onclick="switchTab(\'calendar\')">Weekly Calendar</div>';
+  html += '<div class="tab' + (activeTab === 'calendar' ? ' active' : '') + '" onclick="switchTab(\'calendar\')">Weekly View</div>';
   html += '<div class="tab' + (activeTab === 'mytours' ? ' active' : '') + '" onclick="switchTab(\'mytours\')">Your Tours' +
            (myTours.length ? ' <span class="badge">' + myTours.length + '</span>' : '') + '</div>';
   if (needsSubSlots.length > 0) {
@@ -400,7 +388,7 @@ function render() {
   html += '</div>';
 
   if (activeTab === 'calendar') {
-    html += renderCalendar(openSlots, assignedSlots, needsSubSlots);
+    html += renderWeek(openSlots, assignedSlots, needsSubSlots);
   } else if (activeTab === 'mytours') {
     html += renderMyTours(myTours);
   } else if (activeTab === 'subs') {
@@ -409,7 +397,6 @@ function render() {
 
   app.innerHTML = html;
 
-  // Save bar for calendar tab
   if (activeTab === 'calendar' && openSlots.length > 0) {
     showSaveBar();
   } else {
@@ -417,9 +404,9 @@ function render() {
   }
 }
 
-function renderCalendar(openSlots, assignedSlots, needsSubSlots) {
+function renderWeek(openSlots, assignedSlots, needsSubSlots) {
   const weekEnd = addDays(currentWeekStart, 6);
-  const today = new Date(); today.setHours(0,0,0,0);
+  const today = dateKey(new Date());
 
   // Build slot map by date
   const slotsByDate = {};
@@ -432,77 +419,73 @@ function renderCalendar(openSlots, assignedSlots, needsSubSlots) {
 
   // Week nav
   html += '<div class="week-nav">';
-  html += '<button onclick="prevWeek()">&#8592; Prev</button>';
-  html += '<span class="week-label">' + monthDay(currentWeekStart) + ' &ndash; ' + monthDay(weekEnd) + '</span>';
-  html += '<button onclick="nextWeek()">Next &#8594;</button>';
+  html += '<button onclick="prevWeek()">&larr; Prev</button>';
+  html += '<span class="week-label">' + shortDate(currentWeekStart) + ' &ndash; ' + shortDate(weekEnd) + '</span>';
+  html += '<button onclick="nextWeek()">Next &rarr;</button>';
   html += '</div>';
 
-  // Calendar grid
-  html += '<div class="calendar">';
-
-  // Day headers
-  const dayNames = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
-  dayNames.forEach(d => { html += '<div class="cal-header">' + d + '</div>'; });
-
-  // Day cells
+  // Day-by-day vertical layout
   for (let i = 0; i < 7; i++) {
     const day = addDays(currentWeekStart, i);
     const dk = dateKey(day);
-    const isToday = dk === dateKey(today);
+    const isToday = dk === today;
     const daySlots = slotsByDate[dk] || [];
 
-    // Sort by time
     daySlots.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
-    html += '<div class="cal-day' + (isToday ? ' today' : '') + (daySlots.length === 0 ? ' empty' : '') + '">';
-    html += '<div class="cal-day-number">' + shortDay(day) + ' ' + (day.getMonth()+1) + '/' + day.getDate() + '</div>';
+    html += '<div class="day-section">';
+    html += '<div class="day-header' + (isToday ? ' today' : '') + '">' + fullDate(day) + (isToday ? ' (Today)' : '') + '</div>';
+    html += '<div class="day-body">';
 
-    daySlots.forEach(slot => {
-      const isOpen = slot.status === '' || slot.status === 'Open';
-      const isAssigned = slot.status === 'Assigned';
-      const isYours = isAssigned && slot.assigned.indexOf(currentDocent) !== -1;
-      const isSub = slot.status === 'Needs Sub';
-      const checked = selectedSlots.has(slot.slotId);
+    if (daySlots.length === 0) {
+      html += '<div class="day-empty">No tours scheduled</div>';
+    } else {
+      daySlots.forEach(slot => {
+        const isOpen = slot.status === '' || slot.status === 'Open';
+        const isAssigned = slot.status === 'Assigned';
+        const isYours = isAssigned && slot.assigned.indexOf(currentDocent) !== -1;
+        const isSub = slot.status === 'Needs Sub';
+        const checked = selectedSlots.has(slot.slotId);
 
-      let pillClass = 'open';
-      if (isYours) pillClass = 'assigned-you';
-      else if (isAssigned) pillClass = 'assigned';
-      else if (isSub) pillClass = 'needs-sub';
+        let rowClass = 'open';
+        if (isYours) rowClass = 'assigned-you';
+        else if (isAssigned) rowClass = 'assigned';
+        else if (isSub) rowClass = 'needs-sub';
 
-      let shortType = slot.tourType
-        .replace('Permanent Collection', 'Perm')
-        .replace('Carnegie International', 'CI')
-        .replace('Mindful Museum', 'MM')
-        .replace('CI Activation Tour', 'CI Act')
-        .replace(' Evening', ' Eve');
+        html += '<div class="tour-row ' + rowClass + '">';
 
-      html += '<div class="tour-pill ' + pillClass + '" title="' + escapeHtml(slot.tourType) + ' - ' + escapeHtml(slot.time) + '">';
+        if (isOpen) {
+          html += '<input type="checkbox" value="' + slot.slotId + '"' + (checked ? ' checked' : '') + ' onchange="toggleSlot(this)">';
+        }
 
-      if (isOpen) {
-        html += '<input type="checkbox" value="' + slot.slotId + '"' + (checked ? ' checked' : '') + ' onchange="toggleSlot(this)">';
-      }
+        html += '<span class="tour-time">' + escapeHtml(slot.time) + '</span>';
+        html += '<span class="tour-type">' + escapeHtml(slot.tourType) + '</span>';
 
-      html += '<span class="pill-time">' + escapeHtml(slot.time || '') + '</span> ';
-      html += '<span class="pill-type">' + escapeHtml(shortType) + '</span>';
+        if (isOpen) {
+          const n = slot.signups.length;
+          if (n > 0) html += '<span class="tag-signups">' + n + ' signed up</span>';
+        } else if (isYours) {
+          html += '<span class="tour-tag tag-you">YOU</span>';
+        } else if (isAssigned) {
+          html += '<span class="tour-tag tag-filled">Filled</span>';
+        } else if (isSub) {
+          html += '<button class="tag-claim" onclick="claimSlot(\'' + slot.slotId + '\', this)">Claim</button>';
+        }
 
-      if (isYours) html += ' <span style="font-size:0.65rem">YOU</span>';
-      if (isSub) html += ' <span style="font-size:0.65rem;cursor:pointer" onclick="claimSlot(\'' + slot.slotId + '\', this)">CLAIM</span>';
+        html += '</div>';
+      });
+    }
 
-      html += '</div>';
-    });
-
-    html += '</div>';
+    html += '</div></div>';
   }
 
-  html += '</div>';
   return html;
 }
 
 function renderMyTours(myTours) {
   if (myTours.length === 0) {
-    return '<div class="empty-state">You have no assigned tours yet. Sign up on the calendar and the system will assign you automatically.</div>';
+    return '<div class="empty-state">You have no assigned tours yet. Sign up on the Weekly View and the system will assign you automatically.</div>';
   }
-
   let html = '';
   myTours.forEach(slot => {
     html += '<div class="list-card your-tour">';
@@ -510,8 +493,7 @@ function renderMyTours(myTours) {
     html += '<div class="lc-tour">' + escapeHtml(slot.tourType) + '</div>';
     html += '<div class="lc-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.time) + '</div>';
     html += '<div class="lc-meta">Check your calendar for reminders</div>';
-    html += '</div>';
-    html += '</div>';
+    html += '</div></div>';
   });
   return html;
 }
@@ -520,7 +502,6 @@ function renderNeedsSub(needsSubSlots) {
   if (needsSubSlots.length === 0) {
     return '<div class="empty-state">No openings right now.</div>';
   }
-
   let html = '';
   needsSubSlots.forEach(slot => {
     html += '<div class="list-card sub-needed">';
@@ -534,47 +515,26 @@ function renderNeedsSub(needsSubSlots) {
   return html;
 }
 
-// ============================================================
-// ACTIONS
-// ============================================================
-function selectDocent(name) {
-  currentDocent = name;
-  render();
-}
-
-function switchTab(tab) {
-  activeTab = tab;
-  render();
-}
-
-function prevWeek() {
-  currentWeekStart = addDays(currentWeekStart, -7);
-  render();
-}
-
-function nextWeek() {
-  currentWeekStart = addDays(currentWeekStart, 7);
-  render();
-}
+function selectDocent(name) { currentDocent = name; render(); }
+function switchTab(tab) { activeTab = tab; render(); }
+function prevWeek() { currentWeekStart = addDays(currentWeekStart, -7); render(); }
+function nextWeek() { currentWeekStart = addDays(currentWeekStart, 7); render(); }
 
 function toggleSlot(checkbox) {
-  if (checkbox.checked) {
-    selectedSlots.add(checkbox.value);
-  } else {
-    selectedSlots.delete(checkbox.value);
-  }
+  if (checkbox.checked) selectedSlots.add(checkbox.value);
+  else selectedSlots.delete(checkbox.value);
 }
 
 function showSaveBar() {
-  let saveBar = document.getElementById('save-bar');
-  if (!saveBar) {
-    saveBar = document.createElement('div');
-    saveBar.id = 'save-bar';
-    saveBar.className = 'save-bar';
-    document.body.appendChild(saveBar);
+  let bar = document.getElementById('save-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'save-bar';
+    bar.className = 'save-bar';
+    document.body.appendChild(bar);
   }
-  saveBar.innerHTML = '<button class="btn btn-primary" id="save-btn" onclick="saveSignups()">Save My Availability</button>';
-  saveBar.style.display = 'block';
+  bar.innerHTML = '<button class="btn btn-primary" id="save-btn" onclick="saveSignups()">Save My Availability</button>';
+  bar.style.display = 'block';
 }
 
 function removeSaveBar() {
@@ -586,16 +546,11 @@ async function saveSignups() {
   const btn = document.getElementById('save-btn');
   btn.disabled = true;
   btn.textContent = 'Saving...';
-
   try {
     const resp = await fetch(WEB_APP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({
-        action: 'signup',
-        docent: currentDocent,
-        slots: Array.from(selectedSlots)
-      })
+      body: JSON.stringify({ action: 'signup', docent: currentDocent, slots: Array.from(selectedSlots) })
     });
     const result = await resp.json();
     if (result.ok) {
@@ -607,34 +562,26 @@ async function saveSignups() {
   } catch (err) {
     showMessage('Could not save. Check your internet connection and try again.', 'error');
   }
-
   btn.disabled = false;
   btn.textContent = 'Save My Availability';
 }
 
 async function claimSlot(slotId, el) {
   if (!confirm('Claim this tour? You will receive a calendar invite.')) return;
-
-  if (el.tagName === 'BUTTON') { el.disabled = true; el.textContent = 'Claiming...'; }
-
+  if (el.tagName === 'BUTTON') { el.disabled = true; el.textContent = '...'; }
   try {
     const resp = await fetch(WEB_APP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({
-        action: 'claim',
-        slot: slotId,
-        docent: currentDocent
-      })
+      body: JSON.stringify({ action: 'claim', slot: slotId, docent: currentDocent })
     });
     const result = await resp.json();
     if (result.ok) {
       showMessage('Tour claimed! A calendar invite is on its way.', 'success');
-      await loadData();
     } else {
       showMessage(result.error || 'Could not claim. Someone may have gotten there first.', 'error');
-      await loadData();
     }
+    await loadData();
   } catch (err) {
     showMessage('Could not claim. Please try again.', 'error');
   }
