@@ -1,7 +1,7 @@
 // === CONFIGURATION ===
 const KATHY_EMAIL = 'CHANGE_THIS@example.com';
 const CLAIM_WINDOW_DAYS = 5;
-const AUTO_ASSIGN_DAYS_OUT = 21;
+const AUTO_ASSIGN_DAYS_OUT = 5;
 const MIN_WEEKDAY_SIGNUPS = 2;
 
 const SHEET_SCHEDULE   = 'Schedule';
