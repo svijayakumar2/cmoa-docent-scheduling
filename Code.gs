@@ -18,7 +18,7 @@ function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu('Tour Scheduler')
     .addItem('Run Auto-Assignment Now', 'runAutoAssignment')
-    .addItem('Send Reminders Now', 'sendReminders')
+    .addItem('Send Daily Digest Now', 'sendDailyDigest')
     .addItem('Check Expired Claims', 'checkExpiredClaims')
     .addItem('Backup Now', 'dailyBackup')
     .addToUi();
@@ -451,79 +451,6 @@ function runAutoAssignment() {
         assignedTimes[key].push([slotStart, slotEnd]);
       }
 
-      // Notify docents who signed up but weren't assigned
-      var notAssigned = signups.filter(function(n) { return assigned.indexOf(n) === -1; });
-      for (var j = 0; j < notAssigned.length; j++) {
-        var name = notAssigned[j];
-        if (!tally[name]) continue;
-        MailApp.sendEmail(
-          tally[name].email,
-          'Tour assignment update: ' + tourType + ' on ' + formatDateNice(date),
-          'Hi ' + name + ',\n\n' +
-          'The ' + tourType + ' tour on ' + formatDateNice(date) + ' at ' + time +
-          ' has been assigned to ' + assigned.join(' and ') + '.\n\n' +
-          'Thanks for signing up as available. You remain on the backup list if the assigned docent cancels.\n\n' +
-          '-- Tour Scheduler'
-        );
-      }
-    }
-
-    // If we still need more docents (partial fill or zero signups), email weekday regulars
-    if (spotsRemaining > 0) {
-      var slotDay = date.getDay();
-
-      var slotDayMap = {};
-      for (var k = 1; k < schedData.length; k++) {
-        var sd = new Date(schedData[k][1]);
-        if (!isNaN(sd.getTime())) slotDayMap[(schedData[k][0] || '').toString()] = sd.getDay();
-      }
-
-      var weekdayCounts = {};
-      for (var k = 1; k < signupData.length; k++) {
-        var dName = (signupData[k][1] || '').toString();
-        var sId = (signupData[k][2] || '').toString();
-        if (slotDayMap[sId] === slotDay) {
-          weekdayCounts[dName] = (weekdayCounts[dName] || 0) + 1;
-        }
-      }
-
-      // Don't email people already assigned or who signed up for this slot
-      var alreadyInvolved = {};
-      for (var j = 0; j < signups.length; j++) alreadyInvolved[signups[j]] = true;
-      for (var j = 0; j < assigned.length; j++) alreadyInvolved[assigned[j]] = true;
-
-      var regularsContacted = false;
-      for (var name in weekdayCounts) {
-        if (alreadyInvolved[name]) continue;
-        if (weekdayCounts[name] < MIN_WEEKDAY_SIGNUPS) continue;
-        if (!tally[name]) continue;
-        if (tally[name].unavailable) continue;
-        if (!isCertifiedFor(tally[name], tourType)) continue;
-        MailApp.sendEmail(
-          tally[name].email,
-          'Tour needs you: ' + tourType + ' on ' + formatDateNice(date),
-          'Hi ' + name + ',\n\n' +
-          'We still need ' + spotsRemaining + ' more docent' + (spotsRemaining > 1 ? 's' : '') +
-          ' for the ' + tourType + ' tour on ' +
-          formatDateNice(date) + ' at ' + time + '.\n\n' +
-          'You often sign up for ' + dayName(slotDay) + ' tours. ' +
-          'If you can help, visit the scheduling site and check this slot.\n\n' +
-          '-- Tour Scheduler'
-        );
-        regularsContacted = true;
-      }
-
-      // If nobody was available at all, email Kathy
-      if (assigned.length === 0 && !regularsContacted) {
-        MailApp.sendEmail(
-          KATHY_EMAIL,
-          'No docents available: ' + tourType + ' on ' + formatDateNice(date),
-          'Nobody signed up for the ' + tourType + ' tour on ' +
-          formatDateNice(date) + ' at ' + time +
-          ' and no ' + dayName(date.getDay()) + ' regulars were found.\n\n' +
-          'Slot: ' + slotId + '\n-- Tour Scheduler'
-        );
-      }
     }
   }
 }
@@ -735,53 +662,167 @@ function handleNeedsSub(ss, schedSheet, row) {
 }
 
 // =====================
-// REMINDERS (daily timer)
+// DAILY DIGEST (replaces sendReminders + outreach emails)
+// One email per docent combining upcoming tour reminders + unfilled tour requests
 // =====================
-function sendReminders() {
+function sendDailyDigest() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var schedSheet = ss.getSheetByName(SHEET_SCHEDULE);
   var docentSheet = ss.getSheetByName(SHEET_DOCENTS);
+  var signupSheet = ss.getSheetByName(SHEET_SIGNUPS);
 
   var schedData = schedSheet.getDataRange().getValues();
   var docentData = docentSheet.getDataRange().getValues();
-
-  var emailMap = {};
-  for (var i = 1; i < docentData.length; i++) {
-    if (docentData[i][0]) emailMap[docentData[i][0].toString()] = docentData[i][1].toString();
-  }
+  var signupData = signupSheet.getDataRange().getValues();
 
   var today = new Date();
   today.setHours(0, 0, 0, 0);
+  var cutoff = new Date(today.getTime() + AUTO_ASSIGN_DAYS_OUT * 86400000);
   var day7 = new Date(today.getTime() + 7 * 86400000).getTime();
   var day2 = new Date(today.getTime() + 2 * 86400000).getTime();
 
+  // Build docent info
+  var docents = {};
+  for (var i = 1; i < docentData.length; i++) {
+    var name = (docentData[i][0] || '').toString();
+    if (!name) continue;
+    var unavailUntil = docentData[i][4] ? new Date(docentData[i][4]) : null;
+    var certRaw = (docentData[i][5] || '').toString().trim();
+    docents[name] = {
+      email: docentData[i][1],
+      unavailable: unavailUntil && unavailUntil >= today,
+      certifiedTours: certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null,
+      reminders: [],
+      needsFilling: []
+    };
+  }
+
+  // Build signup map: slotId -> [names]
+  var signupMap = {};
+  for (var i = 1; i < signupData.length; i++) {
+    var docent = (signupData[i][1] || '').toString();
+    var slotId = (signupData[i][2] || '').toString();
+    if (!slotId) continue;
+    if (!signupMap[slotId]) signupMap[slotId] = [];
+    if (signupMap[slotId].indexOf(docent) === -1) signupMap[slotId].push(docent);
+  }
+
+  // Build slotId -> day-of-week map for weekday regular detection
+  var slotDayMap = {};
+  for (var i = 1; i < schedData.length; i++) {
+    var sd = new Date(schedData[i][1]);
+    if (!isNaN(sd.getTime())) slotDayMap[(schedData[i][0] || '').toString()] = sd.getDay();
+  }
+
+  // Count each docent's signups per weekday
+  var weekdaySignups = {};
+  for (var i = 1; i < signupData.length; i++) {
+    var dName = (signupData[i][1] || '').toString();
+    var sId = (signupData[i][2] || '').toString();
+    var dayOfWeek = slotDayMap[sId];
+    if (dayOfWeek === undefined) continue;
+    var key = dName + '|' + dayOfWeek;
+    weekdaySignups[key] = (weekdaySignups[key] || 0) + 1;
+  }
+
+  var kathyUnfilled = [];
+
   for (var i = 1; i < schedData.length; i++) {
     var row = schedData[i];
-    if ((row[5] || '').toString() !== 'Assigned') continue;
-
+    var slotId = (row[0] || '').toString();
     var date = new Date(row[1]);
+    var time = formatTime(row[2]);
+    var tourType = (row[3] || '').toString();
+    var docentsNeeded = row[4] || 1;
+    var status = (row[5] || '').toString();
+    var assignedStr = (row[6] || '').toString();
+
     date.setHours(0, 0, 0, 0);
     var t = date.getTime();
 
-    if (t !== day7 && t !== day2) continue;
-
-    var window = (t === day7) ? '1 week' : '2 days';
-    var assigned = (row[6] || '').toString().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-
-    for (var j = 0; j < assigned.length; j++) {
-      var name = assigned[j];
-      var email = emailMap[name];
-      if (!email) continue;
-      MailApp.sendEmail(
-        email,
-        'Reminder: ' + row[3] + ' tour in ' + window,
-        'Hi ' + name + ',\n\n' +
-        'Reminder that you are leading the ' + row[3] + ' tour on ' +
-        formatDateNice(date) + ' at ' + formatTime(row[2]) + '. This is in ' + window + '.\n\n' +
-        'If you have a conflict, contact Kathy as soon as possible.\n\n' +
-        '-- Tour Scheduler'
-      );
+    // --- REMINDERS: assigned tours coming up in 2 or 7 days ---
+    if (status === 'Assigned' && (t === day7 || t === day2)) {
+      var window = (t === day7) ? '1 week' : '2 days';
+      var assignedNames = assignedStr.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+      for (var j = 0; j < assignedNames.length; j++) {
+        if (docents[assignedNames[j]]) {
+          docents[assignedNames[j]].reminders.push(
+            tourType + ' on ' + formatDateNice(date) + ' at ' + time + ' (in ' + window + ')'
+          );
+        }
+      }
     }
+
+    // --- UNFILLED TOURS: Open slots within the assignment window that need more docents ---
+    if (status !== '' && status !== 'Open') continue;
+    if (date > cutoff || date < today) continue;
+
+    var signups = signupMap[slotId] || [];
+    var assignedCount = assignedStr ? assignedStr.split(',').filter(Boolean).length : 0;
+    var spotsRemaining = docentsNeeded - Math.max(signups.length, assignedCount);
+    if (spotsRemaining <= 0) continue;
+
+    var slotDay = date.getDay();
+    var tourLine = tourType + ' on ' + formatDateNice(date) + ' at ' + time +
+                   ' (' + spotsRemaining + ' spot' + (spotsRemaining > 1 ? 's' : '') + ')';
+
+    var anyoneNotified = false;
+    for (var name in docents) {
+      var d = docents[name];
+      if (d.unavailable) continue;
+      if (!isCertifiedFor(d, tourType)) continue;
+      // Skip if already signed up for this slot
+      if (signups.indexOf(name) !== -1) continue;
+      // Only email weekday regulars (signed up for this day of week at least MIN_WEEKDAY_SIGNUPS times)
+      var wKey = name + '|' + slotDay;
+      if ((weekdaySignups[wKey] || 0) < MIN_WEEKDAY_SIGNUPS) continue;
+
+      d.needsFilling.push(tourLine);
+      anyoneNotified = true;
+    }
+
+    if (!anyoneNotified && signups.length === 0) {
+      kathyUnfilled.push(tourLine);
+    }
+  }
+
+  // Send one email per docent (only if they have something to tell them)
+  for (var name in docents) {
+    var d = docents[name];
+    if (d.reminders.length === 0 && d.needsFilling.length === 0) continue;
+    if (!d.email) continue;
+
+    var body = 'Hi ' + name + ',\n\n';
+
+    if (d.reminders.length > 0) {
+      body += 'YOUR UPCOMING TOURS:\n';
+      for (var j = 0; j < d.reminders.length; j++) {
+        body += '  - ' + d.reminders[j] + '\n';
+      }
+      body += '\nIf you have a conflict, contact Kathy as soon as possible.\n\n';
+    }
+
+    if (d.needsFilling.length > 0) {
+      body += 'TOURS THAT NEED DOCENTS:\n';
+      for (var j = 0; j < d.needsFilling.length; j++) {
+        body += '  - ' + d.needsFilling[j] + '\n';
+      }
+      body += '\nIf you can help, visit the scheduling site and check the slots you\'re available for.\n\n';
+    }
+
+    body += '-- Tour Scheduler';
+
+    MailApp.sendEmail(d.email, 'CMOA Docent Update for ' + name, body);
+  }
+
+  // Email Kathy about any completely unfilled slots with no regulars
+  if (kathyUnfilled.length > 0) {
+    var kathyBody = 'The following tours have no signups and no weekday regulars were found:\n\n';
+    for (var j = 0; j < kathyUnfilled.length; j++) {
+      kathyBody += '  - ' + kathyUnfilled[j] + '\n';
+    }
+    kathyBody += '\nPlease assign manually.\n-- Tour Scheduler';
+    MailApp.sendEmail(KATHY_EMAIL, 'Unfilled tours need attention', kathyBody);
   }
 }
 
