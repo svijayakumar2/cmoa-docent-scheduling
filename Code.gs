@@ -47,7 +47,7 @@ function doPost(e) {
   var action = payload.action;
 
   if (action === 'signup') {
-    return handleSignup(payload.docent, payload.slots);
+    return handleSignup(payload.docent, payload.slots, payload.roles);
   }
 
   if (action === 'claim') {
@@ -84,14 +84,24 @@ function buildSchedulePayload() {
   }
 
   // Build a map of existing signups: slotId -> [names]
+  // and role-specific signups: slotId -> { desk: [names], tour: [names] }
   var signupMap = {};
+  var roleSignupMap = {};
   for (var i = 1; i < signupData.length; i++) {
     var docent = (signupData[i][1] || '').toString();
     var slotId = (signupData[i][2] || '').toString();
+    var role = (signupData[i][3] || '').toString();
     if (!slotId) continue;
     if (!signupMap[slotId]) signupMap[slotId] = [];
     if (signupMap[slotId].indexOf(docent) === -1) {
       signupMap[slotId].push(docent);
+    }
+    if (role) {
+      if (!roleSignupMap[slotId]) roleSignupMap[slotId] = {};
+      if (!roleSignupMap[slotId][role]) roleSignupMap[slotId][role] = [];
+      if (roleSignupMap[slotId][role].indexOf(docent) === -1) {
+        roleSignupMap[slotId][role].push(docent);
+      }
     }
   }
 
@@ -124,7 +134,10 @@ function buildSchedulePayload() {
       tourLeadSchool: (row[9] || '').toString(),
       participantSchool: (row[10] || '').toString(),
       mindfulWelcomeDesk: (row[11] || '').toString(),
-      mindfulTourLead: (row[12] || '').toString()
+      mindfulTourLead: (row[12] || '').toString(),
+      docentsNeeded_Desk: row[13] || 0,
+      docentsNeeded_MindfulTour: row[14] || 0,
+      roleSignups: roleSignupMap[slotId] || {}
     });
   }
 
@@ -137,7 +150,8 @@ function buildSchedulePayload() {
 // =====================
 // SIGNUP
 // =====================
-function handleSignup(docentName, slotIds) {
+function handleSignup(docentName, slotIds, roles) {
+  roles = roles || {};
   var lock = LockService.getScriptLock();
   try {
     lock.waitLock(10000);
@@ -163,31 +177,42 @@ function handleSignup(docentName, slotIds) {
     }
 
     // Find existing signups for this docent
-    var existing = {};
+    // Key by slotId+role to handle role-based signups
+    var existing = {};      // slotId -> row number (for non-role signups)
+    var existingKeys = {};  // "slotId|role" -> row number (for role signups)
     for (var i = 1; i < signupData.length; i++) {
       var d = (signupData[i][1] || '').toString();
       var s = (signupData[i][2] || '').toString();
-      if (d === docentName) existing[s] = i + 1; // row number (1-indexed)
+      var r = (signupData[i][3] || '').toString();
+      if (d === docentName) {
+        existing[s + '|' + r] = i + 1;
+      }
     }
 
     var now = new Date();
 
     // Add new signups
     for (var j = 0; j < slotIds.length; j++) {
-      if (!existing[slotIds[j]]) {
-        signupSheet.appendRow([now, docentName, slotIds[j]]);
+      var role = roles[slotIds[j]] || '';
+      var key = slotIds[j] + '|' + role;
+      if (!existing[key]) {
+        signupSheet.appendRow([now, docentName, slotIds[j], role]);
       }
     }
 
     // Only remove signups for Open slots that the docent deselected.
     // Never touch signups for Assigned/Needs Sub slots.
     var slotSet = {};
-    for (var j = 0; j < slotIds.length; j++) slotSet[slotIds[j]] = true;
+    for (var j = 0; j < slotIds.length; j++) {
+      var role = roles[slotIds[j]] || '';
+      slotSet[slotIds[j] + '|' + role] = true;
+    }
 
     var rowsToDelete = [];
-    for (var s in existing) {
-      if (!slotSet[s] && openSlots[s]) {
-        rowsToDelete.push(existing[s]);
+    for (var key in existing) {
+      var slotId = key.split('|')[0];
+      if (!slotSet[key] && openSlots[slotId]) {
+        rowsToDelete.push(existing[key]);
       }
     }
     // Delete from bottom to top so row numbers stay valid
@@ -377,19 +402,27 @@ function runAutoAssignment() {
   }
 
   // Build signup map: slotId -> [names]
+  // and role signup map: slotId -> { desk: [names], tour: [names] }
   var signupMap = {};
+  var roleMap = {};
   for (var i = 1; i < signupData.length; i++) {
     var docent = (signupData[i][1] || '').toString();
     var slotId = (signupData[i][2] || '').toString();
+    var role = (signupData[i][3] || '').toString();
     if (!slotId) continue;
     if (!signupMap[slotId]) signupMap[slotId] = [];
     if (signupMap[slotId].indexOf(docent) === -1) {
       signupMap[slotId].push(docent);
     }
+    if (role) {
+      if (!roleMap[slotId]) roleMap[slotId] = {};
+      if (!roleMap[slotId][role]) roleMap[slotId][role] = [];
+      if (roleMap[slotId][role].indexOf(docent) === -1) {
+        roleMap[slotId][role].push(docent);
+      }
+    }
   }
 
-  var today = new Date();
-  today.setHours(0, 0, 0, 0);
   var cutoff = new Date(today.getTime() + AUTO_ASSIGN_DAYS_OUT * 86400000);
 
   // Track assigned time ranges per docent per day: { "name|2026-06-01": [[start,end], ...] }
@@ -429,29 +462,56 @@ function runAutoAssignment() {
     var slotDateKey = formatDateISO(date);
 
     var signups = signupMap[slotId] || [];
+    var neededDesk = row[13] || 0;
+    var neededMindfulTour = row[14] || 0;
+    var hasRoles = neededDesk > 0 || neededMindfulTour > 0;
 
-    // Sort by lowest quarterly count (fair rotation)
-    // Filter out anyone who already has a conflicting assignment on this day
-    var eligible = signups.filter(function(n) {
-      if (!tally[n]) return false;
-      if (tally[n].unavailable) return false;
-      if (!isCertifiedFor(tally[n], tourType)) return false;
-      var key = n + '|' + slotDateKey;
-      var existing = assignedTimes[key] || [];
-      for (var k = 0; k < existing.length; k++) {
-        if (slotStart < existing[k][1] && slotEnd > existing[k][0]) return false;
-      }
-      return true;
-    });
-    eligible.sort(function(a, b) { return tally[a].count - tally[b].count; });
+    // Filter eligible docents (available, certified, no time conflict)
+    function filterEligible(names) {
+      return names.filter(function(n) {
+        if (!tally[n]) return false;
+        if (tally[n].unavailable) return false;
+        if (!isCertifiedFor(tally[n], tourType)) return false;
+        var key = n + '|' + slotDateKey;
+        var existing = assignedTimes[key] || [];
+        for (var k = 0; k < existing.length; k++) {
+          if (slotStart < existing[k][1] && slotEnd > existing[k][0]) return false;
+        }
+        return true;
+      }).sort(function(a, b) { return tally[a].count - tally[b].count; });
+    }
 
-    var assigned = eligible.slice(0, docentsNeeded);
+    var assigned = [];
+    var deskAssigned = [];
+    var tourAssigned = [];
+
+    if (hasRoles) {
+      // Role-based assignment (Mindful Museum)
+      var deskSignups = (roleMap[slotId] && roleMap[slotId]['desk']) || [];
+      var tourSignups = (roleMap[slotId] && roleMap[slotId]['tour']) || [];
+      deskAssigned = filterEligible(deskSignups).slice(0, neededDesk);
+      // Remove desk-assigned from tour pool to avoid double-assigning
+      var deskSet = {};
+      for (var j = 0; j < deskAssigned.length; j++) deskSet[deskAssigned[j]] = true;
+      tourAssigned = filterEligible(tourSignups.filter(function(n) { return !deskSet[n]; })).slice(0, neededMindfulTour);
+      assigned = deskAssigned.concat(tourAssigned);
+    } else {
+      // Standard assignment
+      assigned = filterEligible(signups).slice(0, docentsNeeded);
+    }
+
     var spotsRemaining = docentsNeeded - assigned.length;
 
     // If we have at least some people, assign them
     if (assigned.length > 0) {
       schedSheet.getRange(i + 1, 6).setValue('Assigned');
       schedSheet.getRange(i + 1, 7).setValue(assigned.join(', '));
+
+      // Fill role columns for Mindful Museum
+      if (hasRoles) {
+        if (deskAssigned.length > 0) schedSheet.getRange(i + 1, 12).setValue(deskAssigned.join(', '));  // col L: MindfulWelcomeDesk
+        if (tourAssigned.length > 0) schedSheet.getRange(i + 1, 13).setValue(tourAssigned.join(', '));  // col M: MindfulTourLead
+      }
 
       for (var j = 0; j < assigned.length; j++) {
         var name = assigned[j];
@@ -958,13 +1018,16 @@ function dayName(dayNum) {
 // Kathy enters comma-separated tags in the Certified Tours column, e.g. "PC, CI, MM"
 // Tags: PC = Permanent Collection, CI = Carnegie International, MM = Mindful Museum, CIA = CI Activation
 // The system maps each tour type to its required tag and checks if the docent has it.
+// Certification tags: PC, CI, CIA, MM, SCH
+// Kathy enters these in the Certified Tours column of the Docents tab
 var TOUR_TAG_MAP = {
   'permanent collection': 'pc',
   'permanent collection evening': 'pc',
   'carnegie international': 'ci',
   'carnegie international evening': 'ci',
   'ci activation tour': 'cia',
-  'mindful museum': 'mm'
+  'mindful museum': 'mm',
+  'school tour': 'sch'
 };
 
 function isCertifiedFor(docentInfo, tourType) {

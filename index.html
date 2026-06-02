@@ -205,6 +205,14 @@
       flex-shrink: 0;
     }
     .tour-counts.needs-more { color: #c4713b; }
+    .role-select {
+      font-size: 0.75rem;
+      padding: 0.15rem 0.3rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fff;
+      flex-shrink: 0;
+    }
     .tour-tag {
       font-size: 0.75rem;
       font-weight: 600;
@@ -308,6 +316,7 @@ let allDocents = [];
 let docentCertMap = {};
 let tourTagMap = {};
 let selectedSlots = new Set();
+let selectedRoles = {};  // slotId -> 'desk' or 'tour'
 let currentWeekStart = getMonday(new Date());
 let activeTab = 'calendar';
 let tourTypeFilter = '';
@@ -481,8 +490,19 @@ function render() {
   const offeredSlots = openSlots.filter(s => s.signups.indexOf(currentDocent) !== -1);
 
   selectedSlots = new Set();
+  selectedRoles = {};
   openSlots.forEach(s => {
-    if (s.signups.indexOf(currentDocent) !== -1) selectedSlots.add(s.slotId);
+    if (s.signups.indexOf(currentDocent) !== -1) {
+      selectedSlots.add(s.slotId);
+      // Check if this is a role-based signup
+      if (s.roleSignups) {
+        if (s.roleSignups.desk && s.roleSignups.desk.indexOf(currentDocent) !== -1) {
+          selectedRoles[s.slotId] = 'desk';
+        } else if (s.roleSignups.tour && s.roleSignups.tour.indexOf(currentDocent) !== -1) {
+          selectedRoles[s.slotId] = 'tour';
+        }
+      }
+    }
   });
 
   let html = '<div id="message-area"></div>';
@@ -598,11 +618,24 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
 
         html += '<div class="tour-row ' + rowClass + '">';
 
+        const hasRoles = (slot.docentsNeeded_Desk > 0 || slot.docentsNeeded_MindfulTour > 0);
+
         if (isOpen) {
           html += '<input type="checkbox" value="' + slot.slotId + '"' +
             (checked ? ' checked' : '') +
             (!certified ? ' disabled title="Requires certification"' : '') +
             ' onchange="toggleSlot(this)">';
+
+          // Role selector for Mindful Museum
+          if (hasRoles && certified) {
+            const curRole = selectedRoles[slot.slotId] || '';
+            html += '<select class="role-select" data-slot="' + slot.slotId + '" onchange="setRole(this)"' +
+              (!checked ? ' style="display:none"' : '') + '>' +
+              '<option value="">-- Role --</option>' +
+              '<option value="desk"' + (curRole === 'desk' ? ' selected' : '') + '>Welcome Desk</option>' +
+              '<option value="tour"' + (curRole === 'tour' ? ' selected' : '') + '>Tour</option>' +
+              '</select>';
+          }
         }
 
         html += '<span class="tour-time">' + escapeHtml(slot.time) + '</span>';
@@ -610,13 +643,21 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
 
         // Counts
         if (isOpen) {
-          const n = slot.signups.length;
-          const needed = slot.docentsNeeded;
-          if (n >= needed) {
-            html += '<span class="tour-counts">' + n + ' of ' + needed + ' available</span>';
+          if (hasRoles) {
+            const deskSignups = (slot.roleSignups && slot.roleSignups.desk) ? slot.roleSignups.desk.length : 0;
+            const tourSignups = (slot.roleSignups && slot.roleSignups.tour) ? slot.roleSignups.tour.length : 0;
+            html += '<span class="tour-counts' + (deskSignups < slot.docentsNeeded_Desk ? ' needs-more' : '') + '">' +
+              'Desk: ' + deskSignups + '/' + slot.docentsNeeded_Desk +
+              ' Tour: ' + tourSignups + '/' + slot.docentsNeeded_MindfulTour + '</span>';
           } else {
-            const remaining = needed - n;
-            html += '<span class="tour-counts needs-more">needs ' + remaining + ' more</span>';
+            const n = slot.signups.length;
+            const needed = slot.docentsNeeded;
+            if (n >= needed) {
+              html += '<span class="tour-counts">' + n + ' of ' + needed + ' available</span>';
+            } else {
+              const remaining = needed - n;
+              html += '<span class="tour-counts needs-more">needs ' + remaining + ' more</span>';
+            }
           }
         } else if (isYours) {
           html += '<span class="tour-tag tag-you">YOU</span>';
@@ -729,8 +770,28 @@ function nextWeek() { currentWeekStart = addDays(currentWeekStart, 7); render();
 function setTourFilter(val) { tourTypeFilter = val; render(); }
 
 function toggleSlot(checkbox) {
-  if (checkbox.checked) selectedSlots.add(checkbox.value);
-  else selectedSlots.delete(checkbox.value);
+  const slotId = checkbox.value;
+  if (checkbox.checked) {
+    selectedSlots.add(slotId);
+  } else {
+    selectedSlots.delete(slotId);
+    delete selectedRoles[slotId];
+  }
+  // Show/hide role selector if present
+  const roleSelect = checkbox.parentElement.querySelector('.role-select');
+  if (roleSelect) {
+    roleSelect.style.display = checkbox.checked ? '' : 'none';
+    if (!checkbox.checked) roleSelect.value = '';
+  }
+}
+
+function setRole(selectEl) {
+  const slotId = selectEl.getAttribute('data-slot');
+  if (selectEl.value) {
+    selectedRoles[slotId] = selectEl.value;
+  } else {
+    delete selectedRoles[slotId];
+  }
 }
 
 function showSaveBar() {
@@ -758,7 +819,7 @@ async function saveSignups() {
     const resp = await fetch(WEB_APP_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'signup', docent: currentDocent, slots: Array.from(selectedSlots) })
+      body: JSON.stringify({ action: 'signup', docent: currentDocent, slots: Array.from(selectedSlots), roles: selectedRoles })
     });
     const result = await resp.json();
     if (result.ok) {
