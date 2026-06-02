@@ -50,6 +50,58 @@
       margin-left: 0.5rem;
     }
 
+    /* Name search */
+    .name-search-wrap {
+      max-width: 400px;
+      margin: 2rem auto;
+      text-align: center;
+    }
+
+    .name-search-wrap h2 {
+      font-size: 1.2rem;
+      color: #1a3a4a;
+      margin-bottom: 0.5rem;
+    }
+
+    .name-search-wrap p {
+      font-size: 0.9rem;
+      color: #666;
+      margin-bottom: 1rem;
+    }
+
+    .name-search-input {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      font-size: 1.1rem;
+      border: 2px solid #ccc;
+      border-radius: 8px;
+      outline: none;
+    }
+
+    .name-search-input:focus { border-color: #1a3a4a; }
+
+    .name-results {
+      margin-top: 0.5rem;
+      text-align: left;
+    }
+
+    .name-result-btn {
+      display: block;
+      width: 100%;
+      padding: 0.65rem 1rem;
+      margin-bottom: 4px;
+      font-size: 1rem;
+      text-align: left;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      cursor: pointer;
+      font-family: inherit;
+      color: #1a3a4a;
+    }
+
+    .name-result-btn:hover { background: #e8f0f5; border-color: #1a3a4a; }
+
     .container { max-width: 700px; margin: 0 auto; padding: 1rem; }
 
     /* Week navigation */
@@ -296,11 +348,7 @@
 
 <header>
   <h1>CMOA Docent Scheduling</h1>
-  <div class="header-controls" id="header-controls">
-    <select id="docent-select" onchange="selectDocent(this.value)">
-      <option value="">-- Pick your name --</option>
-    </select>
-  </div>
+  <div class="header-controls" id="header-controls"></div>
 </header>
 
 <div class="container" id="app">
@@ -418,17 +466,6 @@ async function loadData() {
       localStorage.removeItem('cmoa_docent_name');
     }
 
-    // Build dropdown (hidden when name is set, but keep it populated)
-    const sel = document.getElementById('docent-select');
-    sel.innerHTML = '<option value="">-- Pick your name --</option>';
-    docentNames.forEach(name => {
-      const opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name;
-      if (name === currentDocent) opt.selected = true;
-      sel.appendChild(opt);
-    });
-
     updateHeaderControls();
     render();
   } catch (err) {
@@ -443,17 +480,27 @@ function updateHeaderControls() {
     controls.innerHTML = '<span class="header-greeting">Welcome, <strong>' + escapeHtml(currentDocent) +
       '</strong> <a href="#" onclick="changeName(); return false;">Not you? Change</a></span>';
   } else {
-    controls.innerHTML = '<select id="docent-select" onchange="selectDocent(this.value)">' +
-      '<option value="">-- Pick your name --</option></select>';
-    const sel = controls.querySelector('select');
-    const docentNames = allDocents.map(d => (typeof d === 'string') ? d : d.name);
-    docentNames.forEach(name => {
-      const opt = document.createElement('option');
-      opt.value = name;
-      opt.textContent = name;
-      sel.appendChild(opt);
-    });
+    controls.innerHTML = '';
   }
+}
+
+function searchName(query) {
+  const results = document.getElementById('name-results');
+  if (!results) return;
+  query = query.trim().toLowerCase();
+  if (query.length === 0) {
+    results.innerHTML = '';
+    return;
+  }
+  const docentNames = allDocents.map(d => (typeof d === 'string') ? d : d.name);
+  const matches = docentNames.filter(n => n.toLowerCase().indexOf(query) !== -1);
+  if (matches.length === 0) {
+    results.innerHTML = '<p style="color:#999; font-size:0.9rem; padding:0.5rem;">No matching names found.</p>';
+    return;
+  }
+  results.innerHTML = matches.map(name =>
+    '<button class="name-result-btn" onclick="selectDocent(\'' + escapeHtml(name).replace(/'/g, "\\'") + '\')">' + escapeHtml(name) + '</button>'
+  ).join('');
 }
 
 function changeName() {
@@ -478,7 +525,13 @@ function render() {
   const app = document.getElementById('app');
 
   if (!currentDocent) {
-    app.innerHTML = '<div class="message message-info">Pick your name above to see the schedule and sign up for tours.</div>';
+    const docentNames = allDocents.map(d => (typeof d === 'string') ? d : d.name);
+    app.innerHTML = '<div class="name-search-wrap">' +
+      '<h2>Welcome!</h2>' +
+      '<p>Start typing your name to get started.</p>' +
+      '<input class="name-search-input" type="text" placeholder="Type your name..." oninput="searchName(this.value)" autofocus>' +
+      '<div class="name-results" id="name-results"></div>' +
+      '</div>';
     removeSaveBar();
     return;
   }
