@@ -39,6 +39,17 @@
 
     .header-controls select option { color: #333; background: #fff; }
 
+    .header-greeting {
+      font-size: 0.95rem;
+      color: rgba(255,255,255,0.9);
+    }
+
+    .header-greeting a {
+      color: rgba(255,255,255,0.7);
+      font-size: 0.85rem;
+      margin-left: 0.5rem;
+    }
+
     .container { max-width: 700px; margin: 0 auto; padding: 1rem; }
 
     /* Week navigation */
@@ -46,7 +57,7 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 1rem;
+      margin-bottom: 0.75rem;
       background: #fff;
       border: 1px solid #ddd;
       border-radius: 8px;
@@ -66,8 +77,26 @@
     .week-nav button:hover { background: #eee; }
     .week-nav .week-label { font-weight: 600; font-size: 1rem; color: #1a3a4a; }
 
+    /* Filter bar */
+    .filter-bar {
+      margin-bottom: 0.75rem;
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .filter-bar label { font-size: 0.85rem; color: #666; }
+
+    .filter-bar select {
+      font-size: 0.85rem;
+      padding: 0.25rem 0.4rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fff;
+    }
+
     /* Tabs */
-    .tabs { display: flex; gap: 2px; margin-bottom: 1rem; }
+    .tabs { display: flex; gap: 2px; margin-bottom: 1rem; flex-wrap: wrap; }
 
     .tab {
       padding: 0.5rem 1rem;
@@ -135,12 +164,13 @@
     /* Tour rows */
     .tour-row {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 0.5rem;
       padding: 0.4rem 0.5rem;
       border-radius: 4px;
       margin-bottom: 2px;
       font-size: 0.9rem;
+      flex-wrap: wrap;
     }
 
     .tour-row:last-child { margin-bottom: 0; }
@@ -148,7 +178,7 @@
     .tour-row input[type="checkbox"] {
       width: 16px;
       height: 16px;
-      margin: 0;
+      margin: 2px 0 0 0;
       accent-color: #1a3a4a;
       flex-shrink: 0;
     }
@@ -157,9 +187,24 @@
     .tour-row.assigned-you { background: #d0e8d0; }
     .tour-row.assigned { background: #f5f5f2; color: #999; }
     .tour-row.needs-sub { background: #fde8d8; }
+    .tour-row.urgent { border-left: 3px solid #c4713b; font-weight: 600; }
+    .tour-row.uncertified { opacity: 0.5; }
 
     .tour-time { font-weight: 600; min-width: 70px; flex-shrink: 0; }
     .tour-type { flex: 1; }
+    .tour-meta {
+      width: 100%;
+      font-size: 0.75rem;
+      color: #777;
+      padding-left: 26px;
+      margin-top: -2px;
+    }
+    .tour-counts {
+      font-size: 0.75rem;
+      color: #888;
+      flex-shrink: 0;
+    }
+    .tour-counts.needs-more { color: #c4713b; }
     .tour-tag {
       font-size: 0.75rem;
       font-weight: 600;
@@ -181,7 +226,6 @@
       border-radius: 10px;
     }
     .tag-claim:hover { background: #a85a2a; }
-    .tag-signups { color: #999; font-size: 0.75rem; flex-shrink: 0; }
 
     /* List cards */
     .list-card {
@@ -202,6 +246,7 @@
     .list-card .lc-meta { font-size: 0.8rem; color: #999; }
     .list-card.your-tour { border-left: 3px solid #3a8a3a; }
     .list-card.sub-needed { border-left: 3px solid #c4713b; }
+    .list-card.offered-tour { border-left: 3px solid #4a7ab5; }
 
     /* Buttons */
     .btn { display: inline-block; padding: 0.45rem 1rem; font-size: 0.9rem; border: none; border-radius: 4px; cursor: pointer; font-family: inherit; }
@@ -234,6 +279,8 @@
     @media (max-width: 600px) {
       header { flex-direction: column; align-items: flex-start; }
       .header-controls select { width: 100%; }
+      .tabs { gap: 1px; }
+      .tab { padding: 0.4rem 0.6rem; font-size: 0.8rem; }
     }
   </style>
 </head>
@@ -241,7 +288,7 @@
 
 <header>
   <h1>CMOA Docent Scheduling</h1>
-  <div class="header-controls">
+  <div class="header-controls" id="header-controls">
     <select id="docent-select" onchange="selectDocent(this.value)">
       <option value="">-- Pick your name --</option>
     </select>
@@ -255,12 +302,15 @@
 <script>
 const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzlIWacNLwGn1Jam5rc3-Y6nVuVhlbZlBjN1Jm-v-c6LzGwx7-hMFGAzIuKvTduUkS2ow/exec';
 
-let currentDocent = '';
+let currentDocent = localStorage.getItem('cmoa_docent_name') || '';
 let allSlots = [];
 let allDocents = [];
+let docentCertMap = {};
+let tourTagMap = {};
 let selectedSlots = new Set();
 let currentWeekStart = getMonday(new Date());
 let activeTab = 'calendar';
+let tourTypeFilter = '';
 
 function getMonday(d) {
   const dt = new Date(d);
@@ -298,13 +348,10 @@ function shortDate(d) {
   return SHORT_MONTHS[dt.getMonth()] + ' ' + dt.getDate();
 }
 
-// Fix the 1899 time format from Google Sheets
 function cleanTime(raw) {
   if (!raw) return '';
   const s = String(raw);
-  // If it's already clean like "11:00 AM", return it
   if (/^\d{1,2}:\d{2}\s*(AM|PM)$/i.test(s.trim())) return s.trim();
-  // Parse the ugly "Sat Dec 30 1899 11:00:00 GMT..." format
   const match = s.match(/(\d{1,2}):(\d{2}):\d{2}\s*GMT/);
   if (match) {
     let hour = parseInt(match[1]);
@@ -314,7 +361,6 @@ function cleanTime(raw) {
     if (hour === 0) hour = 12;
     return hour + ':' + min + ' ' + ampm;
   }
-  // Try parsing as a date object
   const d = new Date(s);
   if (!isNaN(d.getTime())) {
     let hour = d.getHours();
@@ -327,6 +373,14 @@ function cleanTime(raw) {
   return s;
 }
 
+function isCertifiedFor(docentName, tourType) {
+  const certs = docentCertMap[docentName];
+  if (!certs) return true;
+  const requiredTag = tourTagMap[tourType.toLowerCase()];
+  if (!requiredTag) return true;
+  return certs.indexOf(requiredTag) !== -1;
+}
+
 document.addEventListener('DOMContentLoaded', loadData);
 
 async function loadData() {
@@ -335,13 +389,30 @@ async function loadData() {
     const data = await resp.json();
     allDocents = data.docents || [];
     allSlots = data.slots || [];
+    tourTagMap = data.tourTagMap || {};
 
-    // Clean up time values on load
     allSlots.forEach(s => { s.time = cleanTime(s.time); });
 
+    // Build certification lookup
+    docentCertMap = {};
+    const docentNames = [];
+    allDocents.forEach(d => {
+      const name = (typeof d === 'string') ? d : d.name;
+      const certs = (typeof d === 'string') ? null : d.certifiedTours;
+      docentNames.push(name);
+      docentCertMap[name] = certs;
+    });
+
+    // Validate stored name still exists
+    if (currentDocent && docentNames.indexOf(currentDocent) === -1) {
+      currentDocent = '';
+      localStorage.removeItem('cmoa_docent_name');
+    }
+
+    // Build dropdown (hidden when name is set, but keep it populated)
     const sel = document.getElementById('docent-select');
     sel.innerHTML = '<option value="">-- Pick your name --</option>';
-    allDocents.forEach(name => {
+    docentNames.forEach(name => {
       const opt = document.createElement('option');
       opt.value = name;
       opt.textContent = name;
@@ -349,11 +420,49 @@ async function loadData() {
       sel.appendChild(opt);
     });
 
+    updateHeaderControls();
     render();
   } catch (err) {
     document.getElementById('app').innerHTML =
       '<div class="message message-error">Could not load schedule. Please try refreshing.</div>';
   }
+}
+
+function updateHeaderControls() {
+  const controls = document.getElementById('header-controls');
+  if (currentDocent) {
+    controls.innerHTML = '<span class="header-greeting">Welcome, <strong>' + escapeHtml(currentDocent) +
+      '</strong> <a href="#" onclick="changeName(); return false;">Not you? Change</a></span>';
+  } else {
+    controls.innerHTML = '<select id="docent-select" onchange="selectDocent(this.value)">' +
+      '<option value="">-- Pick your name --</option></select>';
+    const sel = controls.querySelector('select');
+    const docentNames = allDocents.map(d => (typeof d === 'string') ? d : d.name);
+    docentNames.forEach(name => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name;
+      sel.appendChild(opt);
+    });
+  }
+}
+
+function changeName() {
+  currentDocent = '';
+  localStorage.removeItem('cmoa_docent_name');
+  updateHeaderControls();
+  render();
+}
+
+function selectDocent(name) {
+  currentDocent = name;
+  if (name) {
+    localStorage.setItem('cmoa_docent_name', name);
+  } else {
+    localStorage.removeItem('cmoa_docent_name');
+  }
+  updateHeaderControls();
+  render();
 }
 
 function render() {
@@ -369,6 +478,7 @@ function render() {
   const needsSubSlots = allSlots.filter(s => s.status === 'Needs Sub');
   const assignedSlots = allSlots.filter(s => s.status === 'Assigned');
   const myTours = assignedSlots.filter(s => s.assigned.indexOf(currentDocent) !== -1);
+  const offeredSlots = openSlots.filter(s => s.signups.indexOf(currentDocent) !== -1);
 
   selectedSlots = new Set();
   openSlots.forEach(s => {
@@ -382,6 +492,8 @@ function render() {
   html += '<div class="tab' + (activeTab === 'calendar' ? ' active' : '') + '" onclick="switchTab(\'calendar\')">Weekly View</div>';
   html += '<div class="tab' + (activeTab === 'mytours' ? ' active' : '') + '" onclick="switchTab(\'mytours\')">Your Tours' +
            (myTours.length ? ' <span class="badge">' + myTours.length + '</span>' : '') + '</div>';
+  html += '<div class="tab' + (activeTab === 'offered' ? ' active' : '') + '" onclick="switchTab(\'offered\')">Offered' +
+           (offeredSlots.length ? ' <span class="badge">' + offeredSlots.length + '</span>' : '') + '</div>';
   if (needsSubSlots.length > 0) {
     html += '<div class="tab' + (activeTab === 'subs' ? ' active' : '') + '" onclick="switchTab(\'subs\')">Needs Sub <span class="badge">' + needsSubSlots.length + '</span></div>';
   }
@@ -391,6 +503,8 @@ function render() {
     html += renderWeek(openSlots, assignedSlots, needsSubSlots);
   } else if (activeTab === 'mytours') {
     html += renderMyTours(myTours);
+  } else if (activeTab === 'offered') {
+    html += renderOffered(offeredSlots);
   } else if (activeTab === 'subs') {
     html += renderNeedsSub(needsSubSlots);
   }
@@ -406,7 +520,12 @@ function render() {
 
 function renderWeek(openSlots, assignedSlots, needsSubSlots) {
   const weekEnd = addDays(currentWeekStart, 6);
-  const today = dateKey(new Date());
+  const todayStr = dateKey(new Date());
+  const todayMs = new Date().setHours(0,0,0,0);
+
+  // Collect unique tour types for filter
+  const tourTypes = new Set();
+  allSlots.forEach(s => { if (s.tourType) tourTypes.add(s.tourType); });
 
   // Build slot map by date
   const slotsByDate = {};
@@ -424,12 +543,28 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
   html += '<button onclick="nextWeek()">Next &rarr;</button>';
   html += '</div>';
 
+  // Tour type filter
+  html += '<div class="filter-bar">';
+  html += '<label>Filter:</label>';
+  html += '<select onchange="setTourFilter(this.value)">';
+  html += '<option value="">All tour types</option>';
+  Array.from(tourTypes).sort().forEach(t => {
+    html += '<option value="' + escapeHtml(t) + '"' + (tourTypeFilter === t ? ' selected' : '') + '>' + escapeHtml(t) + '</option>';
+  });
+  html += '</select>';
+  html += '</div>';
+
   // Day-by-day vertical layout
   for (let i = 0; i < 7; i++) {
     const day = addDays(currentWeekStart, i);
     const dk = dateKey(day);
-    const isToday = dk === today;
-    const daySlots = slotsByDate[dk] || [];
+    const isToday = dk === todayStr;
+    let daySlots = slotsByDate[dk] || [];
+
+    // Apply tour type filter
+    if (tourTypeFilter) {
+      daySlots = daySlots.filter(s => s.tourType === tourTypeFilter);
+    }
 
     daySlots.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 
@@ -446,30 +581,57 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
         const isYours = isAssigned && slot.assigned.indexOf(currentDocent) !== -1;
         const isSub = slot.status === 'Needs Sub';
         const checked = selectedSlots.has(slot.slotId);
+        const certified = isCertifiedFor(currentDocent, slot.tourType);
+
+        // Urgency: open, within 7 days, needs more docents
+        const slotDate = new Date(slot.date + 'T00:00:00');
+        const daysOut = (slotDate - todayMs) / 86400000;
+        const needsMore = slot.signups.length < slot.docentsNeeded;
+        const isUrgent = isOpen && daysOut <= 7 && daysOut >= 0 && needsMore;
 
         let rowClass = 'open';
         if (isYours) rowClass = 'assigned-you';
         else if (isAssigned) rowClass = 'assigned';
         else if (isSub) rowClass = 'needs-sub';
+        if (isUrgent) rowClass += ' urgent';
+        if (isOpen && !certified) rowClass += ' uncertified';
 
         html += '<div class="tour-row ' + rowClass + '">';
 
         if (isOpen) {
-          html += '<input type="checkbox" value="' + slot.slotId + '"' + (checked ? ' checked' : '') + ' onchange="toggleSlot(this)">';
+          html += '<input type="checkbox" value="' + slot.slotId + '"' +
+            (checked ? ' checked' : '') +
+            (!certified ? ' disabled title="Requires certification"' : '') +
+            ' onchange="toggleSlot(this)">';
         }
 
         html += '<span class="tour-time">' + escapeHtml(slot.time) + '</span>';
         html += '<span class="tour-type">' + escapeHtml(slot.tourType) + '</span>';
 
+        // Counts
         if (isOpen) {
           const n = slot.signups.length;
-          if (n > 0) html += '<span class="tag-signups">' + n + ' signed up</span>';
+          const needed = slot.docentsNeeded;
+          if (n >= needed) {
+            html += '<span class="tour-counts">' + n + ' of ' + needed + ' available</span>';
+          } else {
+            const remaining = needed - n;
+            html += '<span class="tour-counts needs-more">needs ' + remaining + ' more</span>';
+          }
         } else if (isYours) {
           html += '<span class="tour-tag tag-you">YOU</span>';
         } else if (isAssigned) {
           html += '<span class="tour-tag tag-filled">Filled</span>';
         } else if (isSub) {
           html += '<button class="tag-claim" onclick="claimSlot(\'' + slot.slotId + '\', this)">Claim</button>';
+        }
+
+        // Tour metadata (second line)
+        let meta = [];
+        if (slot.focusArea) meta.push(slot.focusArea);
+        if (slot.tourAgesGrades) meta.push(slot.tourAgesGrades);
+        if (meta.length > 0) {
+          html += '<div class="tour-meta">' + escapeHtml(meta.join(' | ')) + '</div>';
         }
 
         html += '</div>';
@@ -492,7 +654,45 @@ function renderMyTours(myTours) {
     html += '<div class="lc-info">';
     html += '<div class="lc-tour">' + escapeHtml(slot.tourType) + '</div>';
     html += '<div class="lc-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.time) + '</div>';
-    html += '<div class="lc-meta">Check your calendar for reminders</div>';
+
+    // Show metadata if present
+    let meta = [];
+    if (slot.focusArea) meta.push(slot.focusArea);
+    if (slot.tourAgesGrades) meta.push(slot.tourAgesGrades);
+    if (meta.length > 0) {
+      html += '<div class="lc-meta">' + escapeHtml(meta.join(' | ')) + '</div>';
+    }
+
+    // Show roles if present
+    let roles = [];
+    if (slot.tourLeadSchool) roles.push('Tour Lead: ' + slot.tourLeadSchool);
+    if (slot.participantSchool) roles.push('Participants: ' + slot.participantSchool);
+    if (slot.mindfulWelcomeDesk) roles.push('Welcome Desk: ' + slot.mindfulWelcomeDesk);
+    if (slot.mindfulTourLead) roles.push('Tour Lead: ' + slot.mindfulTourLead);
+    if (roles.length > 0) {
+      html += '<div class="lc-meta">' + roles.map(escapeHtml).join(' &bull; ') + '</div>';
+    } else {
+      html += '<div class="lc-meta">Check your calendar for reminders</div>';
+    }
+
+    html += '</div></div>';
+  });
+  return html;
+}
+
+function renderOffered(offeredSlots) {
+  if (offeredSlots.length === 0) {
+    return '<div class="empty-state">You haven\'t offered availability for any tours yet. Go to the Weekly View to sign up.</div>';
+  }
+  let html = '';
+  offeredSlots.forEach(slot => {
+    const n = slot.signups.length;
+    const needed = slot.docentsNeeded;
+    html += '<div class="list-card offered-tour">';
+    html += '<div class="lc-info">';
+    html += '<div class="lc-tour">' + escapeHtml(slot.tourType) + '</div>';
+    html += '<div class="lc-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.time) + '</div>';
+    html += '<div class="lc-meta">' + n + ' of ' + needed + ' available &mdash; pending assignment</div>';
     html += '</div></div>';
   });
   return html;
@@ -508,6 +708,14 @@ function renderNeedsSub(needsSubSlots) {
     html += '<div class="lc-info">';
     html += '<div class="lc-tour">' + escapeHtml(slot.tourType) + '</div>';
     html += '<div class="lc-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.time) + '</div>';
+
+    let meta = [];
+    if (slot.focusArea) meta.push(slot.focusArea);
+    if (slot.tourAgesGrades) meta.push(slot.tourAgesGrades);
+    if (meta.length > 0) {
+      html += '<div class="lc-meta">' + escapeHtml(meta.join(' | ')) + '</div>';
+    }
+
     html += '</div>';
     html += '<button class="btn btn-claim" onclick="claimSlot(\'' + slot.slotId + '\', this)">Claim</button>';
     html += '</div>';
@@ -515,10 +723,10 @@ function renderNeedsSub(needsSubSlots) {
   return html;
 }
 
-function selectDocent(name) { currentDocent = name; render(); }
 function switchTab(tab) { activeTab = tab; render(); }
 function prevWeek() { currentWeekStart = addDays(currentWeekStart, -7); render(); }
 function nextWeek() { currentWeekStart = addDays(currentWeekStart, 7); render(); }
+function setTourFilter(val) { tourTypeFilter = val; render(); }
 
 function toggleSlot(checkbox) {
   if (checkbox.checked) selectedSlots.add(checkbox.value);

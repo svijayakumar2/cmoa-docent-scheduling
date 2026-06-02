@@ -10,6 +10,7 @@ const SHEET_SIGNUPS    = 'Signups';
 const SHEET_CANCELLATIONS = 'Cancellations';
 const BACKUP_FOLDER_NAME  = 'CMOA Backups';
 const BACKUP_KEEP_DAYS    = 30;
+const SITE_URL = 'https://svijayakumar2.github.io/cmoa-docent-scheduling/';
 
 // =====================
 // MENU
@@ -70,10 +71,16 @@ function buildSchedulePayload() {
   var docentData = docentSheet.getDataRange().getValues();
   var signupData = signupSheet.getDataRange().getValues();
 
-  // Build docent list (just names for the dropdown)
+  // Build docent list with certification info
   var docents = [];
   for (var i = 1; i < docentData.length; i++) {
-    if (docentData[i][0]) docents.push(docentData[i][0].toString());
+    if (docentData[i][0]) {
+      var certRaw = (docentData[i][5] || '').toString().trim();
+      docents.push({
+        name: docentData[i][0].toString(),
+        certifiedTours: certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null
+      });
+    }
   }
 
   // Build a map of existing signups: slotId -> [names]
@@ -111,14 +118,20 @@ function buildSchedulePayload() {
       docentsNeeded: row[4] || 1,
       status: status,
       assigned: assigned,
-      signups: signupMap[slotId] || []
+      signups: signupMap[slotId] || [],
+      tourAgesGrades: (row[7] || '').toString(),
+      focusArea: (row[8] || '').toString(),
+      tourLeadSchool: (row[9] || '').toString(),
+      participantSchool: (row[10] || '').toString(),
+      mindfulWelcomeDesk: (row[11] || '').toString(),
+      mindfulTourLead: (row[12] || '').toString()
     });
   }
 
   // Sort by date
   slots.sort(function(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
 
-  return { docents: docents, slots: slots };
+  return { docents: docents, slots: slots, tourTagMap: TOUR_TAG_MAP };
 }
 
 // =====================
@@ -807,7 +820,7 @@ function sendDailyDigest() {
       for (var j = 0; j < d.needsFilling.length; j++) {
         body += '  - ' + d.needsFilling[j] + '\n';
       }
-      body += '\nIf you can help, visit the scheduling site and check the slots you\'re available for.\n\n';
+      body += '\nIf you can help, sign up here: ' + SITE_URL + '\n\n';
     }
 
     body += '-- Tour Scheduler';
