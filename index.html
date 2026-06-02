@@ -500,6 +500,10 @@ function render() {
           selectedRoles[s.slotId] = 'desk';
         } else if (s.roleSignups.tour && s.roleSignups.tour.indexOf(currentDocent) !== -1) {
           selectedRoles[s.slotId] = 'tour';
+        } else if (s.roleSignups.lead && s.roleSignups.lead.indexOf(currentDocent) !== -1) {
+          selectedRoles[s.slotId] = 'lead';
+        } else if (s.roleSignups.participant && s.roleSignups.participant.indexOf(currentDocent) !== -1) {
+          selectedRoles[s.slotId] = 'participant';
         }
       }
     }
@@ -618,7 +622,9 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
 
         html += '<div class="tour-row ' + rowClass + '">';
 
-        const hasRoles = (slot.docentsNeeded_Desk > 0 || slot.docentsNeeded_MindfulTour > 0);
+        const hasMindfulRoles = (slot.docentsNeeded_Desk > 0 || slot.docentsNeeded_MindfulTour > 0);
+        const hasSchoolRoles = (slot.docentsNeeded_Lead > 0 || slot.docentsNeeded_Participant > 0);
+        const hasRoles = hasMindfulRoles || hasSchoolRoles;
 
         if (isOpen) {
           html += '<input type="checkbox" value="' + slot.slotId + '"' +
@@ -626,15 +632,21 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
             (!certified ? ' disabled title="Requires certification"' : '') +
             ' onchange="toggleSlot(this)">';
 
-          // Role selector for Mindful Museum
+          // Role selector
           if (hasRoles && certified) {
             const curRole = selectedRoles[slot.slotId] || '';
             html += '<select class="role-select" data-slot="' + slot.slotId + '" onchange="setRole(this)"' +
               (!checked ? ' style="display:none"' : '') + '>' +
-              '<option value="">-- Role --</option>' +
-              '<option value="desk"' + (curRole === 'desk' ? ' selected' : '') + '>Welcome Desk</option>' +
-              '<option value="tour"' + (curRole === 'tour' ? ' selected' : '') + '>Tour</option>' +
-              '</select>';
+              '<option value="">-- Role --</option>';
+            if (hasMindfulRoles) {
+              html += '<option value="desk"' + (curRole === 'desk' ? ' selected' : '') + '>Welcome Desk</option>' +
+                '<option value="tour"' + (curRole === 'tour' ? ' selected' : '') + '>Tour</option>';
+            }
+            if (hasSchoolRoles) {
+              html += '<option value="lead"' + (curRole === 'lead' ? ' selected' : '') + '>Lead</option>' +
+                '<option value="participant"' + (curRole === 'participant' ? ' selected' : '') + '>Participant</option>';
+            }
+            html += '</select>';
           }
         }
 
@@ -643,12 +655,18 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
 
         // Counts
         if (isOpen) {
-          if (hasRoles) {
+          if (hasMindfulRoles) {
             const deskSignups = (slot.roleSignups && slot.roleSignups.desk) ? slot.roleSignups.desk.length : 0;
             const tourSignups = (slot.roleSignups && slot.roleSignups.tour) ? slot.roleSignups.tour.length : 0;
-            html += '<span class="tour-counts' + (deskSignups < slot.docentsNeeded_Desk ? ' needs-more' : '') + '">' +
+            html += '<span class="tour-counts' + (deskSignups < slot.docentsNeeded_Desk || tourSignups < slot.docentsNeeded_MindfulTour ? ' needs-more' : '') + '">' +
               'Desk: ' + deskSignups + '/' + slot.docentsNeeded_Desk +
               ' Tour: ' + tourSignups + '/' + slot.docentsNeeded_MindfulTour + '</span>';
+          } else if (hasSchoolRoles) {
+            const leadSignups = (slot.roleSignups && slot.roleSignups.lead) ? slot.roleSignups.lead.length : 0;
+            const partSignups = (slot.roleSignups && slot.roleSignups.participant) ? slot.roleSignups.participant.length : 0;
+            html += '<span class="tour-counts' + (leadSignups < slot.docentsNeeded_Lead || partSignups < slot.docentsNeeded_Participant ? ' needs-more' : '') + '">' +
+              'Lead: ' + leadSignups + '/' + slot.docentsNeeded_Lead +
+              ' Participant: ' + partSignups + '/' + slot.docentsNeeded_Participant + '</span>';
           } else {
             const n = slot.signups.length;
             const needed = slot.docentsNeeded;
@@ -669,8 +687,7 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
 
         // Tour metadata (second line)
         let meta = [];
-        if (slot.focusArea) meta.push(slot.focusArea);
-        if (slot.tourAgesGrades) meta.push(slot.tourAgesGrades);
+        if (slot.details) meta.push(slot.details);
         if (meta.length > 0) {
           html += '<div class="tour-meta">' + escapeHtml(meta.join(' | ')) + '</div>';
         }

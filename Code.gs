@@ -129,14 +129,15 @@ function buildSchedulePayload() {
       status: status,
       assigned: assigned,
       signups: signupMap[slotId] || [],
-      tourAgesGrades: (row[7] || '').toString(),
-      focusArea: (row[8] || '').toString(),
-      tourLeadSchool: (row[9] || '').toString(),
-      participantSchool: (row[10] || '').toString(),
-      mindfulWelcomeDesk: (row[11] || '').toString(),
-      mindfulTourLead: (row[12] || '').toString(),
-      docentsNeeded_Desk: row[13] || 0,
-      docentsNeeded_MindfulTour: row[14] || 0,
+      details: (row[7] || '').toString(),
+      tourLeadSchool: (row[8] || '').toString(),
+      participantSchool: (row[9] || '').toString(),
+      mindfulWelcomeDesk: (row[10] || '').toString(),
+      mindfulTourLead: (row[11] || '').toString(),
+      docentsNeeded_Desk: row[12] || 0,
+      docentsNeeded_MindfulTour: row[13] || 0,
+      docentsNeeded_Lead: row[14] || 0,
+      docentsNeeded_Participant: row[15] || 0,
       roleSignups: roleSignupMap[slotId] || {}
     });
   }
@@ -462,9 +463,13 @@ function runAutoAssignment() {
     var slotDateKey = formatDateISO(date);
 
     var signups = signupMap[slotId] || [];
-    var neededDesk = row[13] || 0;
-    var neededMindfulTour = row[14] || 0;
-    var hasRoles = neededDesk > 0 || neededMindfulTour > 0;
+    var neededDesk = row[12] || 0;
+    var neededMindfulTour = row[13] || 0;
+    var neededLead = row[14] || 0;
+    var neededParticipant = row[15] || 0;
+    var hasMindfulRoles = neededDesk > 0 || neededMindfulTour > 0;
+    var hasSchoolRoles = neededLead > 0 || neededParticipant > 0;
+    var hasRoles = hasMindfulRoles || hasSchoolRoles;
 
     // Filter eligible docents (available, certified, no time conflict)
     function filterEligible(names) {
@@ -484,17 +489,27 @@ function runAutoAssignment() {
     var assigned = [];
     var deskAssigned = [];
     var tourAssigned = [];
+    var leadAssigned = [];
+    var participantAssigned = [];
 
-    if (hasRoles) {
+    if (hasMindfulRoles) {
       // Role-based assignment (Mindful Museum)
       var deskSignups = (roleMap[slotId] && roleMap[slotId]['desk']) || [];
       var tourSignups = (roleMap[slotId] && roleMap[slotId]['tour']) || [];
       deskAssigned = filterEligible(deskSignups).slice(0, neededDesk);
-      // Remove desk-assigned from tour pool to avoid double-assigning
       var deskSet = {};
       for (var j = 0; j < deskAssigned.length; j++) deskSet[deskAssigned[j]] = true;
       tourAssigned = filterEligible(tourSignups.filter(function(n) { return !deskSet[n]; })).slice(0, neededMindfulTour);
       assigned = deskAssigned.concat(tourAssigned);
+    } else if (hasSchoolRoles) {
+      // Role-based assignment (School Tour)
+      var leadSignups = (roleMap[slotId] && roleMap[slotId]['lead']) || [];
+      var participantSignups = (roleMap[slotId] && roleMap[slotId]['participant']) || [];
+      leadAssigned = filterEligible(leadSignups).slice(0, neededLead);
+      var leadSet = {};
+      for (var j = 0; j < leadAssigned.length; j++) leadSet[leadAssigned[j]] = true;
+      participantAssigned = filterEligible(participantSignups.filter(function(n) { return !leadSet[n]; })).slice(0, neededParticipant);
+      assigned = leadAssigned.concat(participantAssigned);
     } else {
       // Standard assignment
       assigned = filterEligible(signups).slice(0, docentsNeeded);
@@ -507,10 +522,14 @@ function runAutoAssignment() {
       schedSheet.getRange(i + 1, 6).setValue('Assigned');
       schedSheet.getRange(i + 1, 7).setValue(assigned.join(', '));
 
-      // Fill role columns for Mindful Museum
-      if (hasRoles) {
-        if (deskAssigned.length > 0) schedSheet.getRange(i + 1, 12).setValue(deskAssigned.join(', '));  // col L: MindfulWelcomeDesk
-        if (tourAssigned.length > 0) schedSheet.getRange(i + 1, 13).setValue(tourAssigned.join(', '));  // col M: MindfulTourLead
+      // Fill role columns
+      if (hasMindfulRoles) {
+        if (deskAssigned.length > 0) schedSheet.getRange(i + 1, 11).setValue(deskAssigned.join(', '));  // col K: MindfulWelcomeDesk
+        if (tourAssigned.length > 0) schedSheet.getRange(i + 1, 12).setValue(tourAssigned.join(', '));  // col L: MindfulTourLead
+      }
+      if (hasSchoolRoles) {
+        if (leadAssigned.length > 0) schedSheet.getRange(i + 1, 9).setValue(leadAssigned.join(', '));   // col I: TourLeadSchool
+        if (participantAssigned.length > 0) schedSheet.getRange(i + 1, 10).setValue(participantAssigned.join(', ')); // col J: ParticipantSchool
       }
 
       for (var j = 0; j < assigned.length; j++) {
