@@ -1,8 +1,7 @@
 // === CONFIGURATION ===
-const KATHY_EMAIL = 'CHANGE_THIS@example.com';
+const KATHY_EMAIL = 'saranyav196@gmail.com';
 const CLAIM_WINDOW_DAYS = 5;
 const AUTO_ASSIGN_DAYS_OUT = 5;
-const MIN_WEEKDAY_SIGNUPS = 2;
 
 const SHEET_SCHEDULE   = 'Schedule';
 const SHEET_DOCENTS    = 'Docents';
@@ -11,6 +10,97 @@ const SHEET_CANCELLATIONS = 'Cancellations';
 const BACKUP_FOLDER_NAME  = 'CMOA Backups';
 const BACKUP_KEEP_DAYS    = 30;
 const SITE_URL = 'https://svijayakumar2.github.io/cmoa-docent-scheduling/';
+
+// Certification tags: PC = Permanent Collection, CI = Carnegie International, SCH = School Tour
+// Mindful Museum has NO certification requirement (anyone can sign up)
+// CI Activation uses the same CI certification
+var TOUR_TAG_MAP = {
+  'permanent collection': 'pc',
+  'permanent collection evening': 'pc',
+  'permanent collection (30 min tour)': 'pc',
+  'carnegie international': 'ci',
+  'carnegie international evening': 'ci',
+  'ci activation tour': 'ci',
+  'school tour': 'sch'
+};
+
+// =====================
+// HELPERS
+// =====================
+function isValidEmail(email) {
+  return email && email.toString().indexOf('@') !== -1;
+}
+
+function formatDateNice(date) {
+  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'EEEE, MMMM d');
+}
+
+function formatDateISO(date) {
+  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+}
+
+function dayName(dayNum) {
+  return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dayNum];
+}
+
+function isCertifiedFor(docentInfo, tourType) {
+  if (!docentInfo.certifiedTours) return true;
+  return isCertifiedForRaw(docentInfo.certifiedTours, tourType);
+}
+
+function isCertifiedForRaw(certList, tourType) {
+  if (!certList) return true;
+  var requiredTag = TOUR_TAG_MAP[tourType.toLowerCase()];
+  if (!requiredTag) return true;
+  return certList.indexOf(requiredTag) !== -1;
+}
+
+function formatTime(val) {
+  if (!val) return '';
+  if (val instanceof Date) {
+    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'h:mm a');
+  }
+  return val.toString();
+}
+
+function parseTimeRange(timeVal, date) {
+  var start = new Date(date);
+  start.setHours(13, 0, 0, 0);
+
+  if (timeVal instanceof Date) {
+    start.setHours(timeVal.getHours(), timeVal.getMinutes(), 0, 0);
+    var end = new Date(start.getTime() + 3600000);
+    return [start, end];
+  }
+
+  var timeStr = (timeVal || '').toString();
+  var match = timeStr.match(/(\d+)(?::(\d+))?\s*(AM|PM)?/i);
+  if (match) {
+    var hour = parseInt(match[1]);
+    var minute = parseInt(match[2] || '0');
+    var ampm = (match[3] || '').toUpperCase();
+    if (ampm === 'PM' && hour < 12) hour += 12;
+    if (ampm === 'AM' && hour === 12) hour = 0;
+    start.setHours(hour, minute, 0, 0);
+  }
+  var end = new Date(start.getTime() + 3600000);
+  return [start, end];
+}
+
+// Parse comma-separated day list into lowercase array
+// e.g. "monday, wednesday" -> ["monday", "wednesday"]
+function parseDayList(val) {
+  if (!val) return [];
+  return val.toString().toLowerCase().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+}
+
+// Check if a day name matches a day number
+// dayNum: 0=Sunday..6=Saturday; dayList: ["monday", "wednesday", ...]
+function dayListContains(dayList, dayNum) {
+  if (!dayList || dayList.length === 0) return false;
+  var name = dayName(dayNum).toLowerCase();
+  return dayList.indexOf(name) !== -1;
+}
 
 // =====================
 // MENU
@@ -31,12 +121,10 @@ function onOpen() {
 function doGet(e) {
   var action = (e.parameter.action || '').toString();
 
-  // Claim a cancelled slot (link from email)
   if (action === 'claim') {
     return handleClaim(e.parameter.slot, e.parameter.docent);
   }
 
-  // Return schedule + docent data as JSON for the website
   var result = buildSchedulePayload();
   return ContentService.createTextOutput(JSON.stringify(result))
     .setMimeType(ContentService.MimeType.JSON);
@@ -54,6 +142,10 @@ function doPost(e) {
     return handleClaimJSON(payload.slot, payload.docent);
   }
 
+  if (action === 'savePreferences') {
+    return handleSavePreferences(payload.docent, payload.preferences);
+  }
+
   return ContentService.createTextOutput(JSON.stringify({ error: 'Unknown action' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
@@ -61,6 +153,10 @@ function doPost(e) {
 // =====================
 // GET DATA
 // =====================
+// Docents tab columns (indices):
+//   0: Name, 1: Email, 2: Tours this Quarter, 3: Tours YTD,
+//   4: Unavailable Until, 5: Certified Tours,
+//   6: Preferred Days, 7: Avoid Days, 8: Lead Eligible, 9: Last Minute
 function buildSchedulePayload() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
   var schedSheet = ss.getSheetByName(SHEET_SCHEDULE);
@@ -71,20 +167,23 @@ function buildSchedulePayload() {
   var docentData = docentSheet.getDataRange().getValues();
   var signupData = signupSheet.getDataRange().getValues();
 
-  // Build docent list with certification info
+  // Build docent list with certification and preference info
   var docents = [];
   for (var i = 1; i < docentData.length; i++) {
     if (docentData[i][0]) {
       var certRaw = (docentData[i][5] || '').toString().trim();
       docents.push({
         name: docentData[i][0].toString(),
-        certifiedTours: certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null
+        certifiedTours: certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null,
+        leadEligible: (docentData[i][8] || '').toString().toLowerCase() === 'yes',
+        preferredDays: (docentData[i][6] || '').toString(),
+        avoidDays: (docentData[i][7] || '').toString(),
+        lastMinute: (docentData[i][9] || '').toString().toLowerCase() === 'yes'
       });
     }
   }
 
-  // Build a map of existing signups: slotId -> [names]
-  // and role-specific signups: slotId -> { desk: [names], tour: [names] }
+  // Build signup maps
   var signupMap = {};
   var roleSignupMap = {};
   for (var i = 1; i < signupData.length; i++) {
@@ -114,18 +213,24 @@ function buildSchedulePayload() {
     var slotId = (row[0] || '').toString();
     var date = new Date(row[1]);
     if (isNaN(date.getTime())) continue;
-    if (date < today) continue; // skip past slots
+    if (date < today) continue;
 
     var status = (row[5] || '').toString();
     var assigned = (row[6] || '').toString();
+    var tourType = (row[3] || '').toString();
+    var docentsNeeded = row[4] || 1;
+    // Ensure docentsNeeded is numeric
+    if (typeof docentsNeeded !== 'number') docentsNeeded = 1;
+
+    var isSchoolTour = tourType.toLowerCase() === 'school tour';
 
     slots.push({
       slotId: slotId,
       date: formatDateISO(date),
       dateDisplay: formatDateNice(date),
       time: formatTime(row[2]),
-      tourType: (row[3] || '').toString(),
-      docentsNeeded: row[4] || 1,
+      tourType: tourType,
+      docentsNeeded: docentsNeeded,
       status: status,
       assigned: assigned,
       signups: signupMap[slotId] || [],
@@ -136,13 +241,12 @@ function buildSchedulePayload() {
       mindfulTourLead: (row[11] || '').toString(),
       docentsNeeded_Desk: row[12] || 0,
       docentsNeeded_MindfulTour: row[13] || 0,
-      docentsNeeded_Lead: row[14] || 0,
-      docentsNeeded_Participant: row[15] || 0,
+      docentsNeeded_Lead: isSchoolTour ? 1 : 0,
+      docentsNeeded_Participant: isSchoolTour ? Math.max(docentsNeeded - 1, 0) : 0,
       roleSignups: roleSignupMap[slotId] || {}
     });
   }
 
-  // Sort by date
   slots.sort(function(a, b) { return a.date < b.date ? -1 : a.date > b.date ? 1 : 0; });
 
   return { docents: docents, slots: slots, tourTagMap: TOUR_TAG_MAP };
@@ -168,7 +272,6 @@ function handleSignup(docentName, slotIds, roles) {
     var signupData = signupSheet.getDataRange().getValues();
     var schedData = schedSheet.getDataRange().getValues();
 
-    // Build a set of slot IDs that are still Open (the ones docents can see/toggle)
     var openSlots = {};
     for (var i = 1; i < schedData.length; i++) {
       var status = (schedData[i][5] || '').toString();
@@ -177,10 +280,7 @@ function handleSignup(docentName, slotIds, roles) {
       }
     }
 
-    // Find existing signups for this docent
-    // Key by slotId+role to handle role-based signups
-    var existing = {};      // slotId -> row number (for non-role signups)
-    var existingKeys = {};  // "slotId|role" -> row number (for role signups)
+    var existing = {};
     for (var i = 1; i < signupData.length; i++) {
       var d = (signupData[i][1] || '').toString();
       var s = (signupData[i][2] || '').toString();
@@ -192,7 +292,6 @@ function handleSignup(docentName, slotIds, roles) {
 
     var now = new Date();
 
-    // Add new signups
     for (var j = 0; j < slotIds.length; j++) {
       var role = roles[slotIds[j]] || '';
       var key = slotIds[j] + '|' + role;
@@ -201,8 +300,6 @@ function handleSignup(docentName, slotIds, roles) {
       }
     }
 
-    // Only remove signups for Open slots that the docent deselected.
-    // Never touch signups for Assigned/Needs Sub slots.
     var slotSet = {};
     for (var j = 0; j < slotIds.length; j++) {
       var role = roles[slotIds[j]] || '';
@@ -216,7 +313,6 @@ function handleSignup(docentName, slotIds, roles) {
         rowsToDelete.push(existing[key]);
       }
     }
-    // Delete from bottom to top so row numbers stay valid
     rowsToDelete.sort(function(a, b) { return b - a; });
     for (var j = 0; j < rowsToDelete.length; j++) {
       signupSheet.deleteRow(rowsToDelete[j]);
@@ -230,7 +326,43 @@ function handleSignup(docentName, slotIds, roles) {
 }
 
 // =====================
-// CLAIM (cancelled slot)
+// SAVE PREFERENCES (from website)
+// =====================
+function handleSavePreferences(docentName, prefs) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return ContentService.createTextOutput(JSON.stringify({ error: 'Server busy, try again.' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var docentSheet = ss.getSheetByName(SHEET_DOCENTS);
+    var docentData = docentSheet.getDataRange().getValues();
+
+    for (var i = 1; i < docentData.length; i++) {
+      if ((docentData[i][0] || '').toString() === docentName) {
+        // Column G (7): Preferred Days
+        docentSheet.getRange(i + 1, 7).setValue(prefs.preferredDays || '');
+        // Column H (8): Avoid Days
+        docentSheet.getRange(i + 1, 8).setValue(prefs.avoidDays || '');
+        // Column J (10): Last Minute
+        docentSheet.getRange(i + 1, 10).setValue(prefs.lastMinute ? 'Yes' : '');
+        break;
+      }
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// =====================
+// CLAIM (cancelled slot - HTML response for email links)
 // =====================
 function handleClaim(slotId, docentName) {
   var lock = LockService.getScriptLock();
@@ -250,7 +382,6 @@ function handleClaim(slotId, docentName) {
     var cancelData = cancelSheet.getDataRange().getValues();
     var docentData = docentSheet.getDataRange().getValues();
 
-    // Find the slot
     var slotRow = -1;
     for (var i = 1; i < schedData.length; i++) {
       if (schedData[i][0].toString() === slotId) { slotRow = i; break; }
@@ -264,11 +395,9 @@ function handleClaim(slotId, docentName) {
         '<h2>Already claimed</h2><p>Someone else got there first. Thanks for trying!</p>');
     }
 
-    // Assign the slot
-    schedSheet.getRange(slotRow + 1, 6).setValue('Assigned');  // Status
-    schedSheet.getRange(slotRow + 1, 7).setValue(docentName);  // Assigned Docents
+    schedSheet.getRange(slotRow + 1, 6).setValue('Assigned');
+    schedSheet.getRange(slotRow + 1, 7).setValue(docentName);
 
-    // Update cancellation log
     for (var i = 1; i < cancelData.length; i++) {
       if (cancelData[i][0].toString() === slotId && cancelData[i][3] === 'Broadcast') {
         cancelSheet.getRange(i + 1, 4).setValue('Claimed');
@@ -277,15 +406,16 @@ function handleClaim(slotId, docentName) {
       }
     }
 
-    // Send calendar invite + update tally
     for (var i = 1; i < docentData.length; i++) {
       if (docentData[i][0] === docentName) {
-        sendCalendarInvite(
-          docentData[i][1], docentName, slotId,
-          new Date(schedData[slotRow][1]),
-          schedData[slotRow][2],
-          schedData[slotRow][3].toString()
-        );
+        if (isValidEmail(docentData[i][1])) {
+          sendCalendarInvite(
+            docentData[i][1], docentName, slotId,
+            new Date(schedData[slotRow][1]),
+            schedData[slotRow][2],
+            schedData[slotRow][3].toString()
+          );
+        }
         docentSheet.getRange(i + 1, 3).setValue((docentData[i][2] || 0) + 1);
         break;
       }
@@ -306,7 +436,7 @@ function handleClaim(slotId, docentName) {
   }
 }
 
-// Claim from the website (returns JSON instead of HTML)
+// Claim from the website (JSON response)
 function handleClaimJSON(slotId, docentName) {
   var lock = LockService.getScriptLock();
   try {
@@ -353,12 +483,14 @@ function handleClaimJSON(slotId, docentName) {
 
     for (var i = 1; i < docentData.length; i++) {
       if (docentData[i][0] === docentName) {
-        sendCalendarInvite(
-          docentData[i][1], docentName, slotId,
-          new Date(schedData[slotRow][1]),
-          schedData[slotRow][2],
-          schedData[slotRow][3].toString()
-        );
+        if (isValidEmail(docentData[i][1])) {
+          sendCalendarInvite(
+            docentData[i][1], docentName, slotId,
+            new Date(schedData[slotRow][1]),
+            schedData[slotRow][2],
+            schedData[slotRow][3].toString()
+          );
+        }
         docentSheet.getRange(i + 1, 3).setValue((docentData[i][2] || 0) + 1);
         break;
       }
@@ -384,7 +516,6 @@ function runAutoAssignment() {
   var docentData = docentSheet.getDataRange().getValues();
   var signupData = signupSheet.getDataRange().getValues();
 
-  // Build docent tally
   var today = new Date();
   today.setHours(0, 0, 0, 0);
   var tally = {};
@@ -398,12 +529,11 @@ function runAutoAssignment() {
       count: docentData[i][2] || 0,
       row: i + 1,
       unavailable: unavailUntil && unavailUntil >= today,
-      certifiedTours: certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null
+      certifiedTours: certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null,
+      leadEligible: (docentData[i][8] || '').toString().toLowerCase() === 'yes'
     };
   }
 
-  // Build signup map: slotId -> [names]
-  // and role signup map: slotId -> { desk: [names], tour: [names] }
   var signupMap = {};
   var roleMap = {};
   for (var i = 1; i < signupData.length; i++) {
@@ -426,10 +556,7 @@ function runAutoAssignment() {
 
   var cutoff = new Date(today.getTime() + AUTO_ASSIGN_DAYS_OUT * 86400000);
 
-  // Track assigned time ranges per docent per day: { "name|2026-06-01": [[start,end], ...] }
   var assignedTimes = {};
-
-  // Pre-load existing assignments so we don't double-book with already-assigned slots
   for (var i = 1; i < schedData.length; i++) {
     if ((schedData[i][5] || '').toString() !== 'Assigned') continue;
     var aDate = new Date(schedData[i][1]);
@@ -448,12 +575,11 @@ function runAutoAssignment() {
     var slotId = (row[0] || '').toString();
     var date = new Date(row[1]);
     var timeRaw = row[2];
-    var time = formatTime(timeRaw);
     var tourType = (row[3] || '').toString();
     var docentsNeeded = row[4] || 1;
+    if (typeof docentsNeeded !== 'number') docentsNeeded = 1;
     var status = (row[5] || '').toString();
 
-    // Only assign Open slots within the assignment window
     if (status !== '' && status !== 'Open') continue;
     if (date > cutoff || date < today) continue;
 
@@ -465,13 +591,12 @@ function runAutoAssignment() {
     var signups = signupMap[slotId] || [];
     var neededDesk = row[12] || 0;
     var neededMindfulTour = row[13] || 0;
-    var neededLead = row[14] || 0;
-    var neededParticipant = row[15] || 0;
+    var isSchoolTour = tourType.toLowerCase() === 'school tour';
+    var neededLead = isSchoolTour ? 1 : 0;
+    var neededParticipant = isSchoolTour ? Math.max(docentsNeeded - 1, 0) : 0;
     var hasMindfulRoles = neededDesk > 0 || neededMindfulTour > 0;
     var hasSchoolRoles = neededLead > 0 || neededParticipant > 0;
-    var hasRoles = hasMindfulRoles || hasSchoolRoles;
 
-    // Filter eligible docents (available, certified, no time conflict)
     function filterEligible(names) {
       return names.filter(function(n) {
         if (!tally[n]) return false;
@@ -493,7 +618,6 @@ function runAutoAssignment() {
     var participantAssigned = [];
 
     if (hasMindfulRoles) {
-      // Role-based assignment (Mindful Museum)
       var deskSignups = (roleMap[slotId] && roleMap[slotId]['desk']) || [];
       var tourSignups = (roleMap[slotId] && roleMap[slotId]['tour']) || [];
       deskAssigned = filterEligible(deskSignups).slice(0, neededDesk);
@@ -502,8 +626,9 @@ function runAutoAssignment() {
       tourAssigned = filterEligible(tourSignups.filter(function(n) { return !deskSet[n]; })).slice(0, neededMindfulTour);
       assigned = deskAssigned.concat(tourAssigned);
     } else if (hasSchoolRoles) {
-      // Role-based assignment (School Tour)
       var leadSignups = (roleMap[slotId] && roleMap[slotId]['lead']) || [];
+      // Only lead-eligible docents can be assigned as lead
+      leadSignups = leadSignups.filter(function(n) { return tally[n] && tally[n].leadEligible; });
       var participantSignups = (roleMap[slotId] && roleMap[slotId]['participant']) || [];
       leadAssigned = filterEligible(leadSignups).slice(0, neededLead);
       var leadSet = {};
@@ -511,38 +636,34 @@ function runAutoAssignment() {
       participantAssigned = filterEligible(participantSignups.filter(function(n) { return !leadSet[n]; })).slice(0, neededParticipant);
       assigned = leadAssigned.concat(participantAssigned);
     } else {
-      // Standard assignment
       assigned = filterEligible(signups).slice(0, docentsNeeded);
     }
 
-    var spotsRemaining = docentsNeeded - assigned.length;
-
-    // If we have at least some people, assign them
     if (assigned.length > 0) {
       schedSheet.getRange(i + 1, 6).setValue('Assigned');
       schedSheet.getRange(i + 1, 7).setValue(assigned.join(', '));
 
-      // Fill role columns
       if (hasMindfulRoles) {
-        if (deskAssigned.length > 0) schedSheet.getRange(i + 1, 11).setValue(deskAssigned.join(', '));  // col K: MindfulWelcomeDesk
-        if (tourAssigned.length > 0) schedSheet.getRange(i + 1, 12).setValue(tourAssigned.join(', '));  // col L: MindfulTourLead
+        if (deskAssigned.length > 0) schedSheet.getRange(i + 1, 11).setValue(deskAssigned.join(', '));
+        if (tourAssigned.length > 0) schedSheet.getRange(i + 1, 12).setValue(tourAssigned.join(', '));
       }
       if (hasSchoolRoles) {
-        if (leadAssigned.length > 0) schedSheet.getRange(i + 1, 9).setValue(leadAssigned.join(', '));   // col I: TourLeadSchool
-        if (participantAssigned.length > 0) schedSheet.getRange(i + 1, 10).setValue(participantAssigned.join(', ')); // col J: ParticipantSchool
+        if (leadAssigned.length > 0) schedSheet.getRange(i + 1, 9).setValue(leadAssigned.join(', '));
+        if (participantAssigned.length > 0) schedSheet.getRange(i + 1, 10).setValue(participantAssigned.join(', '));
       }
 
       for (var j = 0; j < assigned.length; j++) {
         var name = assigned[j];
         tally[name].count += 1;
         docentSheet.getRange(tally[name].row, 3).setValue(tally[name].count);
-        sendCalendarInvite(tally[name].email, name, slotId, date, timeRaw, tourType);
+        if (isValidEmail(tally[name].email)) {
+          sendCalendarInvite(tally[name].email, name, slotId, date, timeRaw, tourType);
+        }
 
         var key = name + '|' + slotDateKey;
         if (!assignedTimes[key]) assignedTimes[key] = [];
         assignedTimes[key].push([slotStart, slotEnd]);
       }
-
     }
   }
 }
@@ -558,7 +679,6 @@ function onEditInstallable(e) {
   var col = range.getColumn();
   var row = range.getRow();
 
-  // Column 6 = Status
   if (col !== 6 || row <= 1) return;
 
   var newValue = (e.value || '').toString();
@@ -570,7 +690,6 @@ function onEditInstallable(e) {
   }
 }
 
-// The whole tour is cancelled. Notify assigned docents they don't need to come.
 function handleTourCancelled(ss, schedSheet, row) {
   var docentSheet = ss.getSheetByName(SHEET_DOCENTS);
 
@@ -591,7 +710,7 @@ function handleTourCancelled(ss, schedSheet, row) {
   for (var i = 0; i < assignedList.length; i++) {
     var name = assignedList[i];
     var email = emailMap[name];
-    if (!email) continue;
+    if (!isValidEmail(email)) continue;
     MailApp.sendEmail(
       email,
       'Tour cancelled: ' + tourType + ' on ' + formatDateNice(date),
@@ -601,7 +720,6 @@ function handleTourCancelled(ss, schedSheet, row) {
       '-- Tour Scheduler'
     );
 
-    // Decrement their quarterly count since they won't be doing this tour
     for (var j = 1; j < docentData.length; j++) {
       if (docentData[j][0].toString() === name) {
         var currentCount = docentData[j][2] || 0;
@@ -614,7 +732,7 @@ function handleTourCancelled(ss, schedSheet, row) {
   }
 }
 
-// A docent dropped out. Tour still happening. Blast backups + weekday regulars.
+// A docent dropped out. Tour still happening. Email backups + preference-matched docents.
 function handleNeedsSub(ss, schedSheet, row) {
   var docentSheet = ss.getSheetByName(SHEET_DOCENTS);
   var signupSheet = ss.getSheetByName(SHEET_SIGNUPS);
@@ -627,13 +745,15 @@ function handleNeedsSub(ss, schedSheet, row) {
   var time = formatTime(schedData[2]);
   var originallyAssigned = schedData[6].toString();
 
-  // Get all docent emails and unavailability
   var docentData = docentSheet.getDataRange().getValues();
   var today = new Date();
   today.setHours(0, 0, 0, 0);
   var emailMap = {};
   var unavailMap = {};
   var certMap = {};
+  var preferredDayMap = {};
+  var avoidDayMap = {};
+  var lastMinuteMap = {};
   for (var i = 1; i < docentData.length; i++) {
     if (docentData[i][0]) {
       var dName = docentData[i][0].toString();
@@ -642,10 +762,12 @@ function handleNeedsSub(ss, schedSheet, row) {
       if (unavailUntil && unavailUntil >= today) unavailMap[dName] = true;
       var certRaw = (docentData[i][5] || '').toString().trim();
       certMap[dName] = certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null;
+      preferredDayMap[dName] = parseDayList(docentData[i][6]);
+      avoidDayMap[dName] = parseDayList(docentData[i][7]);
+      lastMinuteMap[dName] = (docentData[i][9] || '').toString().toLowerCase() === 'yes';
     }
   }
 
-  // Get signups for this slot
   var signupData = signupSheet.getDataRange().getValues();
   var slotSignups = [];
   for (var i = 1; i < signupData.length; i++) {
@@ -654,7 +776,6 @@ function handleNeedsSub(ss, schedSheet, row) {
     }
   }
 
-  // Eligible backups = signed up but not originally assigned, not unavailable, and certified
   var assignedList = originallyAssigned.split(',').map(function(s) { return s.trim(); });
   var backups = slotSignups.filter(function(n) {
     if (assignedList.indexOf(n) !== -1) return false;
@@ -664,12 +785,14 @@ function handleNeedsSub(ss, schedSheet, row) {
   });
 
   var webAppUrl = ScriptApp.getService().getUrl();
+  var cancelledDay = date.getDay();
+  var cancelledDayName = dayName(cancelledDay).toLowerCase();
 
-  // Tier 1: Email direct backups immediately
+  // Tier 1: Email direct backups (signed up but not assigned)
   for (var i = 0; i < backups.length; i++) {
     var name = backups[i];
     var email = emailMap[name];
-    if (!email) continue;
+    if (!isValidEmail(email)) continue;
     var claimUrl = webAppUrl + '?action=claim&slot=' + encodeURIComponent(slotId) +
                    '&docent=' + encodeURIComponent(name);
     MailApp.sendEmail(
@@ -683,62 +806,45 @@ function handleNeedsSub(ss, schedSheet, row) {
     );
   }
 
-  // Tier 2: Email docents who tend to be free on this day of the week
-  // but didn't sign up for this specific slot
-  var cancelledDay = date.getDay();
-  var schedAllData = schedSheet.getDataRange().getValues();
-
-  var slotDayMap = {};
-  for (var i = 1; i < schedAllData.length; i++) {
-    var sid = (schedAllData[i][0] || '').toString();
-    var sdate = new Date(schedAllData[i][1]);
-    if (!isNaN(sdate.getTime())) slotDayMap[sid] = sdate.getDay();
-  }
-
-  var weekdayCounts = {};
-  for (var i = 1; i < signupData.length; i++) {
-    var dName = (signupData[i][1] || '').toString();
-    var sId = (signupData[i][2] || '').toString();
-    if (slotDayMap[sId] === cancelledDay) {
-      weekdayCounts[dName] = (weekdayCounts[dName] || 0) + 1;
-    }
-  }
-
+  // Tier 2: Email docents who prefer this day OR are last-minute available
   var alreadyContacted = {};
   for (var i = 0; i < backups.length; i++) alreadyContacted[backups[i]] = true;
   for (var i = 0; i < assignedList.length; i++) alreadyContacted[assignedList[i]] = true;
 
-  for (var name in weekdayCounts) {
+  var tier2Contacted = false;
+  for (var name in emailMap) {
     if (alreadyContacted[name]) continue;
-    if (weekdayCounts[name] < MIN_WEEKDAY_SIGNUPS) continue;
     if (unavailMap[name]) continue;
     if (certMap[name] && !isCertifiedForRaw(certMap[name], tourType)) continue;
+    if (!isValidEmail(emailMap[name])) continue;
+
+    // Skip if they avoid this day
+    if (dayListContains(avoidDayMap[name], cancelledDay)) continue;
+
+    // Include if they prefer this day OR are last-minute available
+    var prefersDay = dayListContains(preferredDayMap[name], cancelledDay);
+    var isLastMinute = lastMinuteMap[name];
+    if (!prefersDay && !isLastMinute) continue;
+
     var email = emailMap[name];
-    if (!email) continue;
     var claimUrl = webAppUrl + '?action=claim&slot=' + encodeURIComponent(slotId) +
                    '&docent=' + encodeURIComponent(name);
+    var reason = prefersDay
+      ? 'You usually tour on ' + dayName(cancelledDay) + 's'
+      : 'You\'re signed up for last-minute availability';
     MailApp.sendEmail(
       email,
       'Tour opening: ' + tourType + ' on ' + formatDateNice(date),
       'Hi ' + name + ',\n\n' +
       'A ' + tourType + ' tour on ' + formatDateNice(date) + ' at ' + time +
-      ' has just opened up. You often sign up for ' + dayName(cancelledDay) +
-      ' tours, so we thought you might be interested.\n\n' +
+      ' has just opened up. ' + reason + ', so we thought you might be interested.\n\n' +
       'First to claim wins. Click here to claim:\n' + claimUrl + '\n\n' +
       '-- Tour Scheduler'
     );
+    tier2Contacted = true;
   }
 
-  // If nobody at all was contacted, email Kathy
-  var weekdayRegularsContacted = false;
-  for (var name in weekdayCounts) {
-    if (!alreadyContacted[name] && weekdayCounts[name] >= MIN_WEEKDAY_SIGNUPS && emailMap[name]) {
-      weekdayRegularsContacted = true;
-      break;
-    }
-  }
-
-  if (backups.length === 0 && !weekdayRegularsContacted) {
+  if (backups.length === 0 && !tier2Contacted) {
     MailApp.sendEmail(
       KATHY_EMAIL,
       'No backups available: ' + tourType + ' on ' + formatDateNice(date),
@@ -754,8 +860,8 @@ function handleNeedsSub(ss, schedSheet, row) {
 }
 
 // =====================
-// DAILY DIGEST (replaces sendReminders + outreach emails)
-// One email per docent combining upcoming tour reminders + unfilled tour requests
+// DAILY DIGEST
+// One email per docent: upcoming tour reminders + unfilled tour requests
 // =====================
 function sendDailyDigest() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -773,7 +879,7 @@ function sendDailyDigest() {
   var day7 = new Date(today.getTime() + 7 * 86400000).getTime();
   var day2 = new Date(today.getTime() + 2 * 86400000).getTime();
 
-  // Build docent info
+  // Build docent info with preferences
   var docents = {};
   for (var i = 1; i < docentData.length; i++) {
     var name = (docentData[i][0] || '').toString();
@@ -784,12 +890,15 @@ function sendDailyDigest() {
       email: docentData[i][1],
       unavailable: unavailUntil && unavailUntil >= today,
       certifiedTours: certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null,
+      preferredDays: parseDayList(docentData[i][6]),
+      avoidDays: parseDayList(docentData[i][7]),
+      lastMinute: (docentData[i][9] || '').toString().toLowerCase() === 'yes',
       reminders: [],
       needsFilling: []
     };
   }
 
-  // Build signup map: slotId -> [names]
+  // Build signup map
   var signupMap = {};
   for (var i = 1; i < signupData.length; i++) {
     var docent = (signupData[i][1] || '').toString();
@@ -797,24 +906,6 @@ function sendDailyDigest() {
     if (!slotId) continue;
     if (!signupMap[slotId]) signupMap[slotId] = [];
     if (signupMap[slotId].indexOf(docent) === -1) signupMap[slotId].push(docent);
-  }
-
-  // Build slotId -> day-of-week map for weekday regular detection
-  var slotDayMap = {};
-  for (var i = 1; i < schedData.length; i++) {
-    var sd = new Date(schedData[i][1]);
-    if (!isNaN(sd.getTime())) slotDayMap[(schedData[i][0] || '').toString()] = sd.getDay();
-  }
-
-  // Count each docent's signups per weekday
-  var weekdaySignups = {};
-  for (var i = 1; i < signupData.length; i++) {
-    var dName = (signupData[i][1] || '').toString();
-    var sId = (signupData[i][2] || '').toString();
-    var dayOfWeek = slotDayMap[sId];
-    if (dayOfWeek === undefined) continue;
-    var key = dName + '|' + dayOfWeek;
-    weekdaySignups[key] = (weekdaySignups[key] || 0) + 1;
   }
 
   var kathyUnfilled = [];
@@ -826,6 +917,7 @@ function sendDailyDigest() {
     var time = formatTime(row[2]);
     var tourType = (row[3] || '').toString();
     var docentsNeeded = row[4] || 1;
+    if (typeof docentsNeeded !== 'number') docentsNeeded = 1;
     var status = (row[5] || '').toString();
     var assignedStr = (row[6] || '').toString();
 
@@ -845,7 +937,7 @@ function sendDailyDigest() {
       }
     }
 
-    // --- UNFILLED TOURS: Open slots within the assignment window that need more docents ---
+    // --- UNFILLED TOURS: Open slots within the assignment window ---
     if (status !== '' && status !== 'Open') continue;
     if (date > cutoff || date < today) continue;
 
@@ -863,11 +955,15 @@ function sendDailyDigest() {
       var d = docents[name];
       if (d.unavailable) continue;
       if (!isCertifiedFor(d, tourType)) continue;
-      // Skip if already signed up for this slot
       if (signups.indexOf(name) !== -1) continue;
-      // Only email weekday regulars (signed up for this day of week at least MIN_WEEKDAY_SIGNUPS times)
-      var wKey = name + '|' + slotDay;
-      if ((weekdaySignups[wKey] || 0) < MIN_WEEKDAY_SIGNUPS) continue;
+
+      // Respect day preferences
+      if (dayListContains(d.avoidDays, slotDay)) continue;
+
+      // Only include docents who prefer this day OR are last-minute available
+      var prefersDay = dayListContains(d.preferredDays, slotDay);
+      var noPref = d.preferredDays.length === 0;
+      if (!prefersDay && !noPref && !d.lastMinute) continue;
 
       d.needsFilling.push(tourLine);
       anyoneNotified = true;
@@ -878,11 +974,11 @@ function sendDailyDigest() {
     }
   }
 
-  // Send one email per docent (only if they have something to tell them)
+  // Send one email per docent
   for (var name in docents) {
     var d = docents[name];
     if (d.reminders.length === 0 && d.needsFilling.length === 0) continue;
-    if (!d.email) continue;
+    if (!isValidEmail(d.email)) continue;
 
     var body = 'Hi ' + name + ',\n\n';
 
@@ -907,9 +1003,8 @@ function sendDailyDigest() {
     MailApp.sendEmail(d.email, 'CMOA Docent Update for ' + name, body);
   }
 
-  // Email Kathy about any completely unfilled slots with no regulars
   if (kathyUnfilled.length > 0) {
-    var kathyBody = 'The following tours have no signups and no weekday regulars were found:\n\n';
+    var kathyBody = 'The following tours have no signups and no matching docents were found:\n\n';
     for (var j = 0; j < kathyUnfilled.length; j++) {
       kathyBody += '  - ' + kathyUnfilled[j] + '\n';
     }
@@ -941,7 +1036,6 @@ function checkExpiredClaims() {
 
     var slotId = cancelData[i][0].toString();
 
-    // Find the slot in schedule
     for (var j = 1; j < schedData.length; j++) {
       if (schedData[j][0].toString() === slotId) {
         MailApp.sendEmail(
@@ -965,6 +1059,7 @@ function checkExpiredClaims() {
 // CALENDAR INVITE
 // =====================
 function sendCalendarInvite(email, name, slotId, date, timeStr, tourType) {
+  if (!isValidEmail(email)) return;
   var times = parseTimeRange(timeStr, date);
   CalendarApp.getDefaultCalendar().createEvent(
     'Tour: ' + tourType,
@@ -980,31 +1075,6 @@ function sendCalendarInvite(email, name, slotId, date, timeStr, tourType) {
   );
 }
 
-function parseTimeRange(timeVal, date) {
-  var start = new Date(date);
-  start.setHours(13, 0, 0, 0); // default 1pm
-
-  // If Sheets gave us a Date object, just pull hours/minutes directly
-  if (timeVal instanceof Date) {
-    start.setHours(timeVal.getHours(), timeVal.getMinutes(), 0, 0);
-    var end = new Date(start.getTime() + 3600000);
-    return [start, end];
-  }
-
-  var timeStr = (timeVal || '').toString();
-  var match = timeStr.match(/(\d+)(?::(\d+))?\s*(AM|PM)?/i);
-  if (match) {
-    var hour = parseInt(match[1]);
-    var minute = parseInt(match[2] || '0');
-    var ampm = (match[3] || '').toUpperCase();
-    if (ampm === 'PM' && hour < 12) hour += 12;
-    if (ampm === 'AM' && hour === 12) hour = 0;
-    start.setHours(hour, minute, 0, 0);
-  }
-  var end = new Date(start.getTime() + 3600000);
-  return [start, end];
-}
-
 // =====================
 // QUARTERLY RESET (optional timer: Jan 1, Apr 1, Jul 1, Oct 1)
 // =====================
@@ -1018,59 +1088,6 @@ function resetQuarterlyTally() {
 }
 
 // =====================
-// HELPERS
-// =====================
-function formatDateNice(date) {
-  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'EEEE, MMMM d');
-}
-
-function formatDateISO(date) {
-  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-}
-
-function dayName(dayNum) {
-  return ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][dayNum];
-}
-
-// Check if a docent (from tally) is certified for a tour type.
-// If certifiedTours is null (column blank), they're eligible for everything.
-// Kathy enters comma-separated tags in the Certified Tours column, e.g. "PC, CI, MM"
-// Tags: PC = Permanent Collection, CI = Carnegie International, MM = Mindful Museum, CIA = CI Activation
-// The system maps each tour type to its required tag and checks if the docent has it.
-// Certification tags: PC, CI, CIA, MM, SCH
-// Kathy enters these in the Certified Tours column of the Docents tab
-var TOUR_TAG_MAP = {
-  'permanent collection': 'pc',
-  'permanent collection evening': 'pc',
-  'carnegie international': 'ci',
-  'carnegie international evening': 'ci',
-  'ci activation tour': 'cia',
-  'mindful museum': 'mm',
-  'school tour': 'sch'
-};
-
-function isCertifiedFor(docentInfo, tourType) {
-  if (!docentInfo.certifiedTours) return true;
-  return isCertifiedForRaw(docentInfo.certifiedTours, tourType);
-}
-
-function isCertifiedForRaw(certList, tourType) {
-  if (!certList) return true;
-  var requiredTag = TOUR_TAG_MAP[tourType.toLowerCase()];
-  if (!requiredTag) return true; // unknown tour type = no restriction
-  return certList.indexOf(requiredTag) !== -1;
-}
-
-function formatTime(val) {
-  if (!val) return '';
-  // If Sheets stored it as a Date object, format it nicely
-  if (val instanceof Date) {
-    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'h:mm a');
-  }
-  return val.toString();
-}
-
-// =====================
 // DAILY BACKUP
 // =====================
 function dailyBackup() {
@@ -1078,12 +1095,10 @@ function dailyBackup() {
   var folders = DriveApp.getFoldersByName(BACKUP_FOLDER_NAME);
   var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(BACKUP_FOLDER_NAME);
 
-  // Create a dated copy
   var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
   var copyName = ss.getName() + ' - Backup ' + today;
   DriveApp.getFileById(ss.getId()).makeCopy(copyName, folder);
 
-  // Delete backups older than BACKUP_KEEP_DAYS
   var cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - BACKUP_KEEP_DAYS);
   var files = folder.getFiles();

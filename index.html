@@ -336,11 +336,64 @@
     .loading { text-align: center; padding: 3rem; color: #888; font-style: italic; }
     .empty-state { text-align: center; color: #999; padding: 2rem; font-style: italic; }
 
+    /* Assigned names in calendar */
+    .tour-assigned-names {
+      font-size: 0.75rem;
+      color: #666;
+      flex-shrink: 0;
+    }
+
+    /* Preferences form */
+    .pref-section { margin-bottom: 1.5rem; }
+    .pref-section h3 { font-size: 1rem; color: #1a3a4a; margin-bottom: 0.5rem; }
+    .pref-section p { font-size: 0.85rem; color: #666; margin-bottom: 0.75rem; }
+    .pref-days { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .pref-day-btn {
+      padding: 0.5rem 1rem;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      background: #fff;
+      cursor: pointer;
+      font-size: 0.9rem;
+      font-family: inherit;
+      color: #333;
+      transition: all 0.15s;
+    }
+    .pref-day-btn.selected { border-color: #1a3a4a; background: #e8f0f5; color: #1a3a4a; font-weight: 600; }
+    .pref-day-btn.avoid-selected { border-color: #c4713b; background: #fde8d8; color: #8a4a2a; font-weight: 600; }
+    .pref-toggle { display: flex; align-items: center; gap: 0.75rem; }
+    .pref-toggle input[type="checkbox"] { width: 18px; height: 18px; accent-color: #1a3a4a; }
+    .pref-toggle label { font-size: 0.95rem; color: #333; }
+    .pref-save-area { text-align: center; margin-top: 1.5rem; }
+
+    /* Print button */
+    .btn-print {
+      background: #fff;
+      border: 1px solid #1a3a4a;
+      color: #1a3a4a;
+      font-size: 0.85rem;
+      padding: 0.35rem 0.8rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      float: right;
+    }
+    .btn-print:hover { background: #e8f0f5; }
+
     @media (max-width: 600px) {
       header { flex-direction: column; align-items: flex-start; }
       .header-controls select { width: 100%; }
       .tabs { gap: 1px; }
       .tab { padding: 0.4rem 0.6rem; font-size: 0.8rem; }
+    }
+
+    @media print {
+      header, .tabs, .week-nav, .filter-bar, .save-bar, .btn-print, .name-search-wrap { display: none !important; }
+      body { background: #fff; font-size: 12pt; }
+      .container { max-width: none; padding: 0; }
+      .list-card { break-inside: avoid; border: 1px solid #ccc; box-shadow: none; }
+      .day-section { break-inside: avoid; }
+      .tour-row input[type="checkbox"], .role-select, .tag-claim { display: none; }
     }
   </style>
 </head>
@@ -356,12 +409,13 @@
 </div>
 
 <script>
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwhPsXXDystpKP-vLgI-XBCcVxU2WVONmXW-U6xrY8UKJh-YWRNsp0uDTKIGR0Lx4iIsg/exec';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwpOtGf8iWBEj4RfKV76XyTsoR0MfUqVW-Ea3Tb3vNBgOJYBti4YbwJlii1xNMnIDkkUw/exec';
 
 let currentDocent = localStorage.getItem('cmoa_docent_name') || '';
 let allSlots = [];
 let allDocents = [];
 let docentCertMap = {};
+let docentInfoMap = {};
 let tourTagMap = {};
 let selectedSlots = new Set();
 let selectedRoles = {};  // slotId -> 'desk' or 'tour'
@@ -450,14 +504,16 @@ async function loadData() {
 
     allSlots.forEach(s => { s.time = cleanTime(s.time); });
 
-    // Build certification lookup
+    // Build certification and info lookups
     docentCertMap = {};
+    docentInfoMap = {};
     const docentNames = [];
     allDocents.forEach(d => {
       const name = (typeof d === 'string') ? d : d.name;
       const certs = (typeof d === 'string') ? null : d.certifiedTours;
       docentNames.push(name);
       docentCertMap[name] = certs;
+      if (typeof d !== 'string') docentInfoMap[name] = d;
     });
 
     // Validate stored name still exists
@@ -540,7 +596,7 @@ function render() {
   const needsSubSlots = allSlots.filter(s => s.status === 'Needs Sub');
   const assignedSlots = allSlots.filter(s => s.status === 'Assigned');
   const myTours = assignedSlots.filter(s => s.assigned.indexOf(currentDocent) !== -1);
-  const offeredSlots = openSlots.filter(s => s.signups.indexOf(currentDocent) !== -1);
+  const offeredSlots = openSlots.filter(s => s.signups.indexOf(currentDocent) !== -1 && s.assigned.indexOf(currentDocent) === -1);
 
   selectedSlots = new Set();
   selectedRoles = {};
@@ -574,6 +630,7 @@ function render() {
   if (needsSubSlots.length > 0) {
     html += '<div class="tab' + (activeTab === 'subs' ? ' active' : '') + '" onclick="switchTab(\'subs\')">Needs Sub <span class="badge">' + needsSubSlots.length + '</span></div>';
   }
+  html += '<div class="tab' + (activeTab === 'preferences' ? ' active' : '') + '" onclick="switchTab(\'preferences\')">My Preferences</div>';
   html += '</div>';
 
   if (activeTab === 'calendar') {
@@ -584,6 +641,8 @@ function render() {
     html += renderOffered(offeredSlots);
   } else if (activeTab === 'subs') {
     html += renderNeedsSub(needsSubSlots);
+  } else if (activeTab === 'preferences') {
+    html += renderPreferences();
   }
 
   app.innerHTML = html;
@@ -696,7 +755,9 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
                 '<option value="tour"' + (curRole === 'tour' ? ' selected' : '') + '>Tour</option>';
             }
             if (hasSchoolRoles) {
-              html += '<option value="lead"' + (curRole === 'lead' ? ' selected' : '') + '>Lead</option>' +
+              var leadOk = docentInfoMap[currentDocent] && docentInfoMap[currentDocent].leadEligible;
+              html += '<option value="lead"' + (curRole === 'lead' ? ' selected' : '') +
+                (!leadOk ? ' disabled' : '') + '>Lead' + (!leadOk ? ' (not eligible)' : '') + '</option>' +
                 '<option value="participant"' + (curRole === 'participant' ? ' selected' : '') + '>Participant</option>';
             }
             html += '</select>';
@@ -733,7 +794,9 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
         } else if (isYours) {
           html += '<span class="tour-tag tag-you">YOU</span>';
         } else if (isAssigned) {
-          html += '<span class="tour-tag tag-filled">Filled</span>';
+          var aNames = slot.assigned.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+          var aDisplay = aNames.length <= 2 ? aNames.join(', ') : aNames[0] + ' +' + (aNames.length - 1);
+          html += '<span class="tour-assigned-names">' + escapeHtml(aDisplay) + '</span>';
         } else if (isSub) {
           html += '<button class="tag-claim" onclick="claimSlot(\'' + slot.slotId + '\', this)">Claim</button>';
         }
@@ -759,7 +822,8 @@ function renderMyTours(myTours) {
   if (myTours.length === 0) {
     return '<div class="empty-state">You have no assigned tours yet. Sign up on the Weekly View and the system will assign you automatically.</div>';
   }
-  let html = '';
+  let html = '<button class="btn-print" onclick="window.print()">Print Schedule</button>';
+  html += '<div style="clear:both"></div>';
   myTours.forEach(slot => {
     html += '<div class="list-card your-tour">';
     html += '<div class="lc-info">';
@@ -784,6 +848,12 @@ function renderMyTours(myTours) {
       html += '<div class="lc-meta">' + roles.map(escapeHtml).join(' &bull; ') + '</div>';
     } else {
       html += '<div class="lc-meta">Check your calendar for reminders</div>';
+    }
+
+    // Coordination view: show other assigned docents
+    var otherAssigned = slot.assigned.split(',').map(function(s) { return s.trim(); }).filter(function(n) { return n && n !== currentDocent; });
+    if (otherAssigned.length > 0) {
+      html += '<div class="lc-meta" style="color:#1a3a4a;">Also assigned: ' + otherAssigned.map(escapeHtml).join(', ') + '</div>';
     }
 
     html += '</div></div>';
@@ -832,6 +902,110 @@ function renderNeedsSub(needsSubSlots) {
     html += '</div>';
   });
   return html;
+}
+
+function renderPreferences() {
+  var info = docentInfoMap[currentDocent] || {};
+  var preferred = (info.preferredDays || '').toString().toLowerCase().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  var avoid = (info.avoidDays || '').toString().toLowerCase().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+  var lastMinute = info.lastMinute || false;
+
+  var days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+  var dayLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+
+  var html = '<div style="background:#fff; border:1px solid #ddd; border-radius:8px; padding:1.5rem; margin-top:0.5rem;">';
+  html += '<h2 style="font-size:1.1rem; color:#1a3a4a; margin-bottom:0.25rem;">My Tour Preferences</h2>';
+  html += '<p style="font-size:0.85rem; color:#666; margin-bottom:1.5rem;">These preferences help the system match you with tours on days that work best for you.</p>';
+
+  html += '<div class="pref-section">';
+  html += '<h3>Preferred Days</h3>';
+  html += '<p>Select the days you prefer to tour. Leave blank if you have no preference.</p>';
+  html += '<div class="pref-days" id="pref-preferred">';
+  for (var i = 0; i < days.length; i++) {
+    var sel = preferred.indexOf(days[i]) !== -1;
+    html += '<button class="pref-day-btn' + (sel ? ' selected' : '') + '" data-day="' + days[i] + '" onclick="togglePrefDay(this, \'preferred\')">' + dayLabels[i] + '</button>';
+  }
+  html += '</div></div>';
+
+  html += '<div class="pref-section">';
+  html += '<h3>Days to Avoid</h3>';
+  html += '<p>Select days you cannot or prefer not to tour. You won\'t be contacted about tours on these days.</p>';
+  html += '<div class="pref-days" id="pref-avoid">';
+  for (var i = 0; i < days.length; i++) {
+    var sel = avoid.indexOf(days[i]) !== -1;
+    html += '<button class="pref-day-btn' + (sel ? ' avoid-selected' : '') + '" data-day="' + days[i] + '" onclick="togglePrefDay(this, \'avoid\')">' + dayLabels[i] + '</button>';
+  }
+  html += '</div></div>';
+
+  html += '<div class="pref-section">';
+  html += '<h3>Last-Minute Availability</h3>';
+  html += '<div class="pref-toggle">';
+  html += '<input type="checkbox" id="pref-lastminute"' + (lastMinute ? ' checked' : '') + '>';
+  html += '<label for="pref-lastminute">I\'m available for last-minute tour requests</label>';
+  html += '</div>';
+  html += '<p style="margin-top:0.5rem;">If checked, you may be contacted when a tour suddenly needs a substitute, even on days you haven\'t listed as preferred.</p>';
+  html += '</div>';
+
+  html += '<div class="pref-save-area">';
+  html += '<button class="btn btn-primary" id="pref-save-btn" onclick="savePreferences()">Save Preferences</button>';
+  html += '</div>';
+
+  html += '</div>';
+  return html;
+}
+
+function togglePrefDay(btn, type) {
+  var cls = type === 'preferred' ? 'selected' : 'avoid-selected';
+  btn.classList.toggle(cls);
+}
+
+async function savePreferences() {
+  var btn = document.getElementById('pref-save-btn');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+
+  var preferred = [];
+  document.querySelectorAll('#pref-preferred .pref-day-btn.selected').forEach(function(b) {
+    preferred.push(b.getAttribute('data-day'));
+  });
+
+  var avoid = [];
+  document.querySelectorAll('#pref-avoid .pref-day-btn.avoid-selected').forEach(function(b) {
+    avoid.push(b.getAttribute('data-day'));
+  });
+
+  var lastMinute = document.getElementById('pref-lastminute').checked;
+
+  try {
+    var resp = await fetch(WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({
+        action: 'savePreferences',
+        docent: currentDocent,
+        preferences: {
+          preferredDays: preferred.join(', '),
+          avoidDays: avoid.join(', '),
+          lastMinute: lastMinute
+        }
+      })
+    });
+    var result = await resp.json();
+    if (result.ok) {
+      if (docentInfoMap[currentDocent]) {
+        docentInfoMap[currentDocent].preferredDays = preferred.join(', ');
+        docentInfoMap[currentDocent].avoidDays = avoid.join(', ');
+        docentInfoMap[currentDocent].lastMinute = lastMinute;
+      }
+      showMessage('Preferences saved.', 'success');
+    } else {
+      showMessage(result.error || 'Could not save preferences.', 'error');
+    }
+  } catch (err) {
+    showMessage('Could not save. Check your internet connection.', 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = 'Save Preferences';
 }
 
 function switchTab(tab) { activeTab = tab; render(); }

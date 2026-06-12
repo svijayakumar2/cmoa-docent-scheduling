@@ -1,0 +1,173 @@
+SlotId,Date,Time,TourType,DocentsNeeded,Status,Assigned,Details,TourLeadSchool,ParticipantSchool,MindfulWelcomeDesk,MindfulTourLead,DocentsNeeded_Desk,DocentsNeeded_MindfulTour
+2026-06-08_PC_1,2026-06-08,11:00 AM,Permanent Collection,1,Assigned,Ken Glick,,,,,,0,0
+2026-06-08_CI_3,2026-06-08,11:30 AM,Carnegie International,1,Assigned,Millicent Smith,,,,,,0,0
+2026-06-08_GT_5,2026-06-08,1:00 PM,Group Tour,1,Assigned,Diane Ramos,"Tour 1: Donor Patron Circle Member, Sufrin Family, 2 Adults, 1 Child, 1pm, also Interested in Teenie Harris and Photography, 30-45 minute tour, 1 Docent Needed",,Diane Ramos,,,0,0
+2026-06-08_CI_4,2026-06-08,1:15 PM,Carnegie International,1,Assigned,Millicent Smith,,,,,,0,0
+2026-06-08_PC_2,2026-06-08,1:30 PM,Permanent Collection,1,Assigned,Martha Baron,,,,,,0,0
+2026-06-09_PC_6,2026-06-09,11:00 AM,Permanent Collection,1,Assigned,Gina Studebaker,,,,,,0,0
+2026-06-09_CI_8,2026-06-09,11:30 AM,Carnegie International,1,Assigned,Carolyn Evans,,,,,,0,0
+2026-06-09_CI_9,2026-06-09,1:15 PM,Carnegie International,1,Assigned,Carolyn Evans,,,,,,0,0
+2026-06-09_PC_7,2026-06-09,1:30 PM,Permanent Collection,1,Assigned,Martha Baron,,,,,,0,0
+2026-06-10_MM_14,2026-06-10,10:30 AM,Mindful Museum,10,Assigned,"Terri Reicher, Susan Schmidt, Annette Paluh, Louise Rogers, Emily Stevick, Robin Ziegler, Martha Baron, Laura Combemale, Kathy Hull, Richard Gittins, Susan Blackman, Carla Kirchner, Laura Wenneker, Michelle Kaczynski","MINDFUL MUSEUM: 10:30-11:00 5 docents, 11:15-11:45 5 Docents, 12:00-12:30 5 docents",,,"Richard Gittins, Susan Blackman, Carla Kirchner, Laura Wenneker, Michelle Kaczynski","Terri Reicher, Susan Schmidt, Annette Paluh, Louise Rogers, Emily Stevick, Robin Ziegler, Martha Baron, Laura Combemale, Kathy Hull",5,5
+2026-06-10_PC_10,2026-06-10,11:00 AM,Permanent Collection,1,Assigned,Millicent Smith,,,,,,0,0
+2026-06-10_GT_16,2026-06-10,11:00 AM,Group Tour,2,Assigned,"Sarah Grebinoski, Angela Williams","Tour 1: Road Scholar, 11:00-12:00, 24 Adults, held in conjuction with the Natural History Museum, Contact Woody Cunningham, 412-716-8980, 2 Docents Needed",Sarah Grebinoski,Angela Williams,,,0,0
+2026-06-10_CI_12,2026-06-10,11:30 AM,Carnegie International,1,Assigned,Jan Ban,,,,,,0,0
+2026-06-10_CIA_15,2026-06-10,12:00 PM,CI Activation Tour,3,Assigned,Michael Golde,CI Activation 12-2,,,,,0,0
+2026-06-10_CI_13,2026-06-10,1:15 PM,Carnegie International,1,Assigned,Jan Rodgers,,,,,,0,0
+2026-06-10_PC_11,2026-06-10,1:30 PM,Permanent Collection,1,Assigned,Tricia Brown,,,,,,0,0
+2026-06-11_PC_17,2026-06-11,11:00 AM,Permanent Collection,1,Assigned,Deborah Prence,,,,,,0,0
+2026-06-11_GT_23,2026-06-11,11:00 AM,Group Tour,1,Assigned,Martha Baron,"Tour 1: Donor Tour, CI59, 4 Adults, 11:00-12:00, Contact: Zeja Copes, CopesZ@carnegiemuseums.org, 1 Docent Needed",,Martha Baron,,,0,0
+2026-06-11_CI_20,2026-06-11,11:30 AM,Carnegie International,1,Assigned,Judy Grune,,,,,,0,0
+2026-06-11_CI_21,2026-06-11,1:15 PM,Carnegie International,1,Assigned,Angela Williams,,,,,,0,0
+2026-06-11_PC_18,2026-06-11,1:30 PM,Permanent Collection,1,Assigned,Lauren Cantwell,,,,,,0,0
+2026-06-11_CI_22,2026-06-11,6:00 PM,Carnegie International Evening,1,Assigned,Steve Zelicoff,,,,,,0,0
+2026-06-11_PC_19,2026-06-11,6:30 PM,Permanent Collection Evening,1,Assigned,Byron Fruit,,,,,,0,0
+2026-06-12_PC_24,2026-06-12,11:00 AM,Permanent Collection,1,Assigned,Michelle Kaczynski,,,,,,0,0
+2026-06-12_CI_26,2026-06-12,11:30 AM,Carnegie International,1,Assigned,Leeann Lunak,,,,,,0,0
+2026-06-12_CI_27,2026-06-12,1:15 PM,Carnegie International,1,Assigned,Jan Rodgers,,,,,,0,0
+2026-06-12_PC_25,2026-06-12,1:30 PM,Permanent Collection,1,Assigned,Lauren Cantwell,,,,,,0,0
+2026-06-13_GT_32,2026-06-13,10:00 AM,Group Tour,1,Assigned,Diane Ramos,"Tour 1: Simmons Univ. Alumni Association, 7 to 14 people, 11:10, 1 Docent Needed",,Diane Ramos,,,0,0
+2026-06-13_PC_28,2026-06-13,11:00 AM,Permanent Collection,1,Assigned,Gina Studebaker,,,,,,0,0
+2026-06-13_CI_30,2026-06-13,11:30 AM,Carnegie International,1,Assigned,Terri Cheng,,,,,,0,0
+2026-06-13_CI_31,2026-06-13,1:15 PM,Carnegie International,1,Assigned,Angela Williams,,,,,,0,0
+2026-06-13_PC_29,2026-06-13,1:30 PM,Permanent Collection,1,Assigned,Lauren Cantwell,,,,,,0,0
+2026-06-14_PC_33,2026-06-14,11:00 AM,Permanent Collection,1,Assigned,Sue Cavanaugh,,,,,,0,0
+2026-06-14_CI_35,2026-06-14,11:30 AM,Carnegie International,1,Assigned,Leeann Lunak,,,,,,0,0
+2026-06-14_CI_36,2026-06-14,1:15 PM,Carnegie International,1,Assigned,Millicent Smith,,,,,,0,0
+2026-06-14_PC_34,2026-06-14,1:30 PM,Permanent Collection,1,Assigned,Michael Belshe,,,,,,0,0
+2026-06-15_PC_37,2026-06-15,11:00 AM,Permanent Collection,1,Assigned,Gina Studebaker,,,,,,0,0
+2026-06-15_CI_39,2026-06-15,11:30 AM,Carnegie International,1,Assigned,Carolyn Evans,,,,,,0,0
+2026-06-15_CIA_42,2026-06-15,12:00 PM,CI Activation Tour,3,Assigned,"Michael Golde, Sue Varga, Ken Glick",CI Activation 12-1:30,,,,,0,0
+2026-06-15_GT_41,2026-06-15,1:00 PM,Group Tour,1,Assigned,Millicent Smith,"Tour 1: Donor Tour, 1pm",,Millicent Smith,,,0,0
+2026-06-15_CI_40,2026-06-15,1:15 PM,Carnegie International,1,Assigned,Leeann Lunak,,,,,,0,0
+2026-06-15_PC_38,2026-06-15,1:30 PM,Permanent Collection,1,Assigned,Gina Studebaker,,,,,,0,0
+2026-06-16_PC_43,2026-06-16,11:00 AM,Permanent Collection,1,Assigned,Louise Rogers,,,,,,0,0
+2026-06-16_CI_45,2026-06-16,11:30 AM,Carnegie International,1,Assigned,Eliot Kennedy,,,,,,0,0
+2026-06-16_CI_46,2026-06-16,1:15 PM,Carnegie International,1,Assigned,Eliot Kennedy,,,,,,0,0
+2026-06-16_PC_44,2026-06-16,1:30 PM,Permanent Collection,1,Assigned,Lynn Portnoff,,,,,,0,0
+2026-06-17_MM_51,2026-06-17,10:30 AM,Mindful Museum,9,Assigned,"Diane Ramos, Michael Belshe, Susan Schmidt, Judy Grune, Emily Stevick, Annette Paluh, Terri Reicher, Louise Rogers, Sue Joslyn, Deborah Prence, Laura Wenneker, Carla Kirchner, Michelle Kaczynski","MINDFUL MUSEUM: 10:30-11:00 5 docents, 11:15-11:45 5 Docents, 12:00-12:30 5 docents",,,"Deborah Prence, Laura Wenneker, Carla Kirchner, Michelle Kaczynski","Diane Ramos, Michael Belshe, Susan Schmidt, Judy Grune, Emily Stevick, Annette Paluh, Terri Reicher, Louise Rogers, Sue Joslyn",4,5
+2026-06-17_PC_47,2026-06-17,11:00 AM,Permanent Collection,1,Assigned,Sue Bertenthal,,,,,,0,0
+2026-06-17_CI_49,2026-06-17,11:30 AM,Carnegie International,1,Assigned,Colleen McDonnell,,,,,,0,0
+2026-06-17_CIA_52,2026-06-17,12:00 PM,CI Activation Tour,3,Assigned,"Margaret Izzo, Linna Sawicki",CI Activation 12-2,,,,,0,0
+2026-06-17_CI_50,2026-06-17,1:15 PM,Carnegie International,1,Assigned,Jan Rodgers,,,,,,0,0
+2026-06-17_PC_48,2026-06-17,1:30 PM,Permanent Collection,1,Assigned,Tricia Brown,,,,,,0,0
+2026-06-18_PC_53,2026-06-18,11:00 AM,Permanent Collection,1,Assigned,Kathy Hull,,,,,,0,0
+2026-06-18_CI_56,2026-06-18,11:30 AM,Carnegie International,1,Assigned,Millicent Smith,,,,,,0,0
+2026-06-18_CI_57,2026-06-18,1:15 PM,Carnegie International,1,Assigned,Alice Lieb,,,,,,0,0
+2026-06-18_PC_54,2026-06-18,1:30 PM,Permanent Collection,1,Assigned,Laurel Shoemaker,,,,,,0,0
+2026-06-18_CI_58,2026-06-18,6:00 PM,Carnegie International Evening,1,Assigned,Steve Zelicoff,,,,,,0,0
+2026-06-18_PC_55,2026-06-18,6:30 PM,Permanent Collection Evening,1,Assigned,Leah Gross,,,,,,0,0
+2026-06-19_PC_59,2026-06-19,11:00 AM,Permanent Collection,1,Assigned,Lori McMahon,,,,,,0,0
+2026-06-19_CI_61,2026-06-19,11:30 AM,Carnegie International,1,Assigned,Sarah Grebinoski,,,,,,0,0
+2026-06-19_CI_62,2026-06-19,1:15 PM,Carnegie International,1,Assigned,Angela Williams,,,,,,0,0
+2026-06-19_PC_60,2026-06-19,1:30 PM,Permanent Collection,1,Assigned,Millicent Smith,,,,,,0,0
+2026-06-20_PC_63,2026-06-20,11:00 AM,Permanent Collection,1,Assigned,Millicent Smith,,,,,,0,0
+2026-06-20_CI_65,2026-06-20,11:30 AM,Carnegie International,1,Assigned,Paula Hopkins,,,,,,0,0
+2026-06-20_CI_66,2026-06-20,1:15 PM,Carnegie International,1,Assigned,Alice Lieb,,,,,,0,0
+2026-06-20_PC_64,2026-06-20,1:30 PM,Permanent Collection,1,Assigned,Leah Gross,,,,,,0,0
+2026-06-21_PC_67,2026-06-21,11:00 AM,Permanent Collection,1,Assigned,Deborah Prence,,,,,,0,0
+2026-06-21_CI_69,2026-06-21,11:30 AM,Carnegie International,1,Assigned,Leeann Lunak,,,,,,0,0
+2026-06-21_CI_70,2026-06-21,1:15 PM,Carnegie International,1,Assigned,Millicent Smith,,,,,,0,0
+2026-06-21_PC_68,2026-06-21,1:30 PM,Permanent Collection,1,Assigned,Michael Belshe,,,,,,0,0
+2026-06-22_GT_77,2026-06-22,10:00 AM,Group Tour,1,Assigned,Steve Zelicoff,"Tour 3: Donor Tour,",,Steve Zelicoff,,,0,0
+2026-06-22_PC_71,2026-06-22,11:00 AM,Permanent Collection,1,Assigned,Gina Studebaker,,,,,,0,0
+2026-06-22_CI_73,2026-06-22,11:30 AM,Carnegie International,1,Assigned,Millicent Smith,,,,,,0,0
+2026-06-22_GT_75,2026-06-22,1:00 PM,Group Tour,1,Assigned,Scott Grosh,"Tour 1: Osher Lifelong Learning, CI59 Tour, 50 Adults, 1pm, Contact: Anna Mihalega, 412-383-4119, anm520@pitt.edu, 4 Docents Needed",Scott Grosh,,,,0,0
+2026-06-22_GT_76,2026-06-22,1:00 PM,School Tour,3,Open,,"Tour 2: CMU U Dream, 13 Students, 3 Adults, 1pm, Contact: Aftyn Giles, 412-417-1724, agiels@andrew.cmu.edu, 1-2 Docents Needed",,,,,0,0
+2026-06-22_CI_74,2026-06-22,1:15 PM,Carnegie International,1,Assigned,Millicent Smith,,,,,,0,0
+2026-06-22_PC_72,2026-06-22,1:30 PM,Permanent Collection,1,Assigned,Gina Studebaker,,,,,,0,0
+2026-06-23_PC_78,2026-06-23,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-06-23_CI_80,2026-06-23,11:30 AM,Carnegie International,1,Assigned,Paula Hopkins,,,,,,0,0
+2026-06-23_CI_81,2026-06-23,1:15 PM,Carnegie International,1,Assigned,Sarah Grebinoski,,,,,,0,0
+2026-06-23_PC_79,2026-06-23,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-06-23_GT_82,2026-06-23,2:00 PM,Group Tour,1,Assigned,Alice Lieb,"Tour 1: Men's Club, 15 Adults, 2pm, Contact: James Reitz, 412-973-7912, j5650r@comcast.net, 1 Docent Needed",,Alice Lieb,,,0,0
+2026-06-24_MM_87,2026-06-24,10:30 AM,Mindful Museum,6,Assigned,"Jan Rodgers, Annette Paluh, Emily Stevick, Laura Combemale, Tricia Brown, Carla Kirchner","MINDFUL MUSEUM: 10:30-11:00 5 docents, 11:15-11:45 5 Docents, 12:00-12:30 5 docents",,,Carla Kirchner,"Jan Rodgers, Annette Paluh, Emily Stevick, Laura Combemale, Tricia Brown",1,5
+2026-06-24_PC_83,2026-06-24,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-06-24_CI_85,2026-06-24,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-06-24_CIA_88,2026-06-24,12:00 PM,CI Activation Tour,3,Assigned,Kathy Hull,CI Activation 12-2,,,,,0,0
+2026-06-24_CI_86,2026-06-24,1:15 PM,Carnegie International,1,Assigned,Colleen McDonnell,,,,,,0,0
+2026-06-24_PC_84,2026-06-24,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-06-25_PC_89,2026-06-25,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-06-25_GT_95,2026-06-25,11:00 AM,Group Tour,1,Open,,"Tour 1: Friendship Village of South Hills, 15 Adults, 11am, Contact: Colin Campbell, 724-949-1336, colin.campbell@lifespacecommunities.com, 1 Docent Needed",,,,,0,0
+2026-06-25_CI_92,2026-06-25,11:30 AM,Carnegie International,1,Assigned,Millicent Smith,,,,,,0,0
+2026-06-25_CI_93,2026-06-25,1:15 PM,Carnegie International,1,Assigned,Millicent Smith,,,,,,0,0
+2026-06-25_PC_90,2026-06-25,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-06-25_CI_94,2026-06-25,6:00 PM,Carnegie International Evening,1,Assigned,Steve Zelicoff,,,,,,0,0
+2026-06-25_PC_91,2026-06-25,6:30 PM,Permanent Collection Evening,1,Open,,,,,,,0,0
+2026-06-26_PC_96,2026-06-26,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-06-26_CI_98,2026-06-26,11:30 AM,Carnegie International,1,Assigned,Angela Williams,,,,,,0,0
+2026-06-26_CI_99,2026-06-26,1:15 PM,Carnegie International,1,Assigned,Alice Lieb,,,,,,0,0
+2026-06-26_PC_97,2026-06-26,1:30 PM,Permanent Collection,1,Assigned,Leeann Lunak,,,,,,0,0
+2026-06-27_PC_100,2026-06-27,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-06-27_GT_104,2026-06-27,11:00 AM,Group Tour,1,Open,,"Tour 1: Gatto/CMP Development, 4 Adults, 11am, Contact: Diane Hammond, 412-605-7857, hammondd@carnegiemuseums.org, 1 Docent Needed",,,,,0,0
+2026-06-27_CI_102,2026-06-27,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-06-27_CI_103,2026-06-27,1:15 PM,Carnegie International,1,Open,,,,,,,0,0
+2026-06-27_PC_101,2026-06-27,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-06-28_PC_105,2026-06-28,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-06-28_CI_107,2026-06-28,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-06-28_CI_108,2026-06-28,1:15 PM,Carnegie International,1,Open,,,,,,,0,0
+2026-06-28_PC_106,2026-06-28,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-06-29_PC_109,2026-06-29,11:00 AM,Permanent Collection,1,Assigned,Gina Studebaker,,,,,,0,0
+2026-06-29_CI_111,2026-06-29,11:30 AM,Carnegie International,1,Assigned,Leeann Lunak,,,,,,0,0
+2026-06-29_CI_112,2026-06-29,1:15 PM,Carnegie International,1,Assigned,Millicent Smith,,,,,,0,0
+2026-06-29_PC_110,2026-06-29,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-06-30_PC_113,2026-06-30,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-06-30_CI_115,2026-06-30,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-06-30_CI_116,2026-06-30,1:15 PM,Carnegie International,1,Assigned,Jan Rodgers,,,,,,0,0
+2026-06-30_PC_114,2026-06-30,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-01_MM_121,2026-07-01,10:30 AM,Mindful Museum,6,Assigned,"Jan Rodgers, Annette Paluh, Terri Reicher, Tricia Brown, Judy Grune, Carla Kirchner","MINDFUL MUSEUM: 10:30-11:00 5 docents, 11:15-11:45 5 Docents, 12:00-12:30 5 docents",,,Carla Kirchner,"Jan Rodgers, Annette Paluh, Terri Reicher, Tricia Brown, Judy Grune",1,5
+2026-07-01_PC_117,2026-07-01,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-01_CI_119,2026-07-01,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-01_CIA_122,2026-07-01,12:00 PM,CI Activation Tour,3,Open,,CI Activation 12-2,,,,,0,0
+2026-07-01_CI_120,2026-07-01,1:15 PM,Carnegie International,1,Assigned,Sarah Grebinoski,,,,,,0,0
+2026-07-01_PC_118,2026-07-01,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-02_PC_123,2026-07-02,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-02_CI_126,2026-07-02,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-02_CI_127,2026-07-02,1:15 PM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-02_PC_124,2026-07-02,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-02_CI_128,2026-07-02,6:00 PM,Carnegie International Evening,1,Assigned,Steve Zelicoff,,,,,,0,0
+2026-07-02_PC_125,2026-07-02,6:30 PM,Permanent Collection Evening,1,Open,,,,,,,0,0
+2026-07-03_PC_129,2026-07-03,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-03_CI_131,2026-07-03,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-03_CI_132,2026-07-03,1:15 PM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-03_PC_130,2026-07-03,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-04_PC_133,2026-07-04,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-04_CI_135,2026-07-04,11:30 AM,Carnegie International,1,Assigned,Millicent Smith,,,,,,0,0
+2026-07-04_CI_136,2026-07-04,1:15 PM,Carnegie International,1,Assigned,Millicent Smith,,,,,,0,0
+2026-07-04_PC_134,2026-07-04,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-05_PC_137,2026-07-05,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-05_CI_139,2026-07-05,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-05_CI_140,2026-07-05,1:15 PM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-05_PC_138,2026-07-05,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-06_PC_141,2026-07-06,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-06_CI_143,2026-07-06,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-06_CI_144,2026-07-06,1:15 PM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-06_PC_142,2026-07-06,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-07_PC_145,2026-07-07,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-07_CI_147,2026-07-07,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-07_CI_148,2026-07-07,1:15 PM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-07_PC_146,2026-07-07,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-08_MM_153,2026-07-08,10:30 AM,Mindful Museum,5,Open,,"MINDFUL MUSEUM: 10:30-11:00 5 docents, 11:15-11:45 5 Docents, 12:00-12:30 5 docents",,,,,0,5
+2026-07-08_PC_149,2026-07-08,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-08_CI_151,2026-07-08,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-08_CIA_154,2026-07-08,12:00 PM,CI Activation Tour,3,Open,,CI Activation 12-2,,,,,0,0
+2026-07-08_CI_152,2026-07-08,1:15 PM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-08_PC_150,2026-07-08,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-09_PC_155,2026-07-09,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-09_CI_158,2026-07-09,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-09_CI_159,2026-07-09,1:15 PM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-09_PC_156,2026-07-09,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-09_CI_160,2026-07-09,6:00 PM,Carnegie International Evening,1,Open,,,,,,,0,0
+2026-07-09_PC_157,2026-07-09,6:30 PM,Permanent Collection Evening,1,Open,,,,,,,0,0
+2026-07-10_PC_161,2026-07-10,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-10_CI_163,2026-07-10,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-10_CI_164,2026-07-10,1:15 PM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-10_PC_162,2026-07-10,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-11_PC_165,2026-07-11,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-11_CI_167,2026-07-11,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-11_CI_168,2026-07-11,1:15 PM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-11_PC_166,2026-07-11,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-12_PC_169,2026-07-12,11:00 AM,Permanent Collection,1,Open,,,,,,,0,0
+2026-07-12_CI_171,2026-07-12,11:30 AM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-12_CI_172,2026-07-12,1:15 PM,Carnegie International,1,Open,,,,,,,0,0
+2026-07-12_PC_170,2026-07-12,1:30 PM,Permanent Collection,1,Open,,,,,,,0,0
