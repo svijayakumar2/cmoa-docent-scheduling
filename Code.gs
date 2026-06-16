@@ -24,6 +24,10 @@ var TOUR_TAG_MAP = {
   'school tour': 'sch'
 };
 
+// Use the spreadsheet's timezone (Eastern) so dates/times don't shift
+// when the script is run by someone in a different timezone
+var TIMEZONE = 'America/New_York';
+
 // =====================
 // HELPERS
 // =====================
@@ -32,11 +36,11 @@ function isValidEmail(email) {
 }
 
 function formatDateNice(date) {
-  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'EEEE, MMMM d');
+  return Utilities.formatDate(date, TIMEZONE, 'EEEE, MMMM d');
 }
 
 function formatDateISO(date) {
-  return Utilities.formatDate(date, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  return Utilities.formatDate(date, TIMEZONE, 'yyyy-MM-dd');
 }
 
 function dayName(dayNum) {
@@ -58,7 +62,7 @@ function isCertifiedForRaw(certList, tourType) {
 function formatTime(val) {
   if (!val) return '';
   if (val instanceof Date) {
-    return Utilities.formatDate(val, Session.getScriptTimeZone(), 'h:mm a');
+    return Utilities.formatDate(val, TIMEZONE, 'h:mm a');
   }
   return val.toString();
 }
@@ -1095,7 +1099,7 @@ function dailyBackup() {
   var folders = DriveApp.getFoldersByName(BACKUP_FOLDER_NAME);
   var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(BACKUP_FOLDER_NAME);
 
-  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var today = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
   var copyName = ss.getName() + ' - Backup ' + today;
   DriveApp.getFileById(ss.getId()).makeCopy(copyName, folder);
 
