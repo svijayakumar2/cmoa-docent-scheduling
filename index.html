@@ -380,6 +380,38 @@
     }
     .btn-print:hover { background: #e8f0f5; }
 
+    .btn-dropout {
+      background: #fff;
+      border: 1px solid #c44;
+      color: #c44;
+      font-size: 0.8rem;
+      padding: 0.3rem 0.7rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      align-self: center;
+      margin-left: 0.5rem;
+      flex-shrink: 0;
+    }
+    .btn-dropout:hover { background: #fef0f0; }
+    .btn-dropout:disabled { opacity: 0.5; cursor: default; }
+
+    .btn-withdraw {
+      background: #fff;
+      border: 1px solid #888;
+      color: #555;
+      font-size: 0.8rem;
+      padding: 0.3rem 0.7rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      align-self: center;
+      margin-left: 0.5rem;
+      flex-shrink: 0;
+    }
+    .btn-withdraw:hover { background: #f5f5f5; }
+    .btn-withdraw:disabled { opacity: 0.5; cursor: default; }
+
     @media (max-width: 600px) {
       header { flex-direction: column; align-items: flex-start; }
       .header-controls select { width: 100%; }
@@ -388,7 +420,7 @@
     }
 
     @media print {
-      header, .tabs, .week-nav, .filter-bar, .save-bar, .btn-print, .name-search-wrap { display: none !important; }
+      header, .tabs, .week-nav, .filter-bar, .save-bar, .btn-print, .btn-dropout, .name-search-wrap { display: none !important; }
       body { background: #fff; font-size: 12pt; }
       .container { max-width: none; padding: 0; }
       .list-card { break-inside: avoid; border: 1px solid #ccc; box-shadow: none; }
@@ -409,7 +441,7 @@
 </div>
 
 <script>
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzQSp6Y4ZL7gKufXoZ9o8MWmOj-SrrgoEWFWAC5bSk9xRaeUfa97m2IEB_Xv969pHTPKw/exec';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzjnIL03L6tQJwd7kYaqiKy5aDPXBo5NyChmZeTJqxPvYHeCWi8-uQa-VVzUnzV_3msCQ/exec';
 
 let currentDocent = localStorage.getItem('cmoa_docent_name') || '';
 let allSlots = [];
@@ -871,7 +903,9 @@ function renderMyTours(myTours) {
       html += '<div class="lc-meta" style="color:#1a3a4a;">Also assigned: ' + otherAssigned.map(escapeHtml).join(', ') + '</div>';
     }
 
-    html += '</div></div>';
+    html += '</div>';
+    html += '<button class="btn-dropout" onclick="dropOut(\'' + escapeHtml(slot.slotId) + '\', this)">Drop Out</button>';
+    html += '</div>';
   });
   return html;
 }
@@ -889,7 +923,9 @@ function renderOffered(offeredSlots) {
     html += '<div class="lc-tour">' + escapeHtml(slot.tourType) + '</div>';
     html += '<div class="lc-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.time) + '</div>';
     html += '<div class="lc-meta">' + n + ' of ' + needed + ' available &mdash; pending assignment</div>';
-    html += '</div></div>';
+    html += '</div>';
+    html += '<button class="btn-withdraw" onclick="withdrawOffer(\'' + escapeHtml(slot.slotId) + '\', this)">Withdraw</button>';
+    html += '</div>';
   });
   return html;
 }
@@ -1107,11 +1143,59 @@ async function claimSlot(slotId, el) {
     if (result.ok) {
       showMessage('Tour claimed! A calendar invite is on its way.', 'success');
     } else {
-      showMessage(result.error || 'Could not claim. Someone may have gotten there first.', 'error');
+      showMessage(result.error || 'Someone else has already claimed this shift.', 'error');
     }
     await loadData();
   } catch (err) {
     showMessage('Could not claim. Please try again.', 'error');
+  }
+}
+
+async function withdrawOffer(slotId, el) {
+  if (!confirm('Withdraw your offer for this tour?')) return;
+  el.disabled = true;
+  el.textContent = 'Withdrawing...';
+  try {
+    const resp = await fetch(WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'withdraw', slot: slotId, docent: currentDocent })
+    });
+    const result = await resp.json();
+    if (result.ok) {
+      showMessage('Your offer has been withdrawn.', 'success');
+    } else {
+      showMessage(result.error || 'Could not withdraw. Please try again.', 'error');
+    }
+    await loadData();
+  } catch (err) {
+    showMessage('Could not withdraw. Please try again.', 'error');
+    el.disabled = false;
+    el.textContent = 'Withdraw';
+  }
+}
+
+async function dropOut(slotId, el) {
+  if (!confirm('Are you sure you want to drop out of this tour? The system will automatically reach out to find a replacement.')) return;
+  el.disabled = true;
+  el.textContent = 'Dropping...';
+  try {
+    const resp = await fetch(WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action: 'dropout', slot: slotId, docent: currentDocent })
+    });
+    const result = await resp.json();
+    if (result.ok) {
+      showMessage('You have been removed from this tour. The system is contacting available docents.', 'success');
+    } else {
+      showMessage(result.error || 'Could not process. Please try again.', 'error');
+    }
+    await loadData();
+  } catch (err) {
+    showMessage('Could not process. Please try again.', 'error');
+    el.disabled = false;
+    el.textContent = 'Drop Out';
   }
 }
 

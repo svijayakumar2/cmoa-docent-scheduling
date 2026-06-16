@@ -156,6 +156,14 @@ function doPost(e) {
     return handleSavePreferences(payload.docent, payload.preferences);
   }
 
+  if (action === 'dropout') {
+    return handleDropOut(payload.slot, payload.docent);
+  }
+
+  if (action === 'withdraw') {
+    return handleWithdraw(payload.slot, payload.docent);
+  }
+
   return ContentService.createTextOutput(JSON.stringify({ error: 'Unknown action' }))
     .setMimeType(ContentService.MimeType.JSON);
 }
@@ -401,7 +409,7 @@ function handleClaim(slotId, docentName) {
 
     if (schedData[slotRow][5].toString() !== 'Needs Sub') {
       return HtmlService.createHtmlOutput(
-        '<h2>Already claimed</h2><p>Someone else got there first. Thanks for trying!</p>');
+        '<h2>Already claimed</h2><p>Someone else has already claimed this shift. Thanks for trying!</p>');
     }
 
     schedSheet.getRange(slotRow + 1, 6).setValue('Assigned');
@@ -475,7 +483,7 @@ function handleClaimJSON(slotId, docentName) {
     }
 
     if (schedData[slotRow][5].toString() !== 'Needs Sub') {
-      return ContentService.createTextOutput(JSON.stringify({ error: 'Already claimed. Someone else got there first.' }))
+      return ContentService.createTextOutput(JSON.stringify({ error: 'Someone else has already claimed this shift.' }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -503,6 +511,132 @@ function handleClaimJSON(slotId, docentName) {
         docentSheet.getRange(i + 1, 3).setValue((docentData[i][2] || 0) + 1);
         break;
       }
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// =====================
+// DROP OUT (docent self-service cancellation)
+// Removes docent from assigned list, sets status to Needs Sub, triggers outreach
+// =====================
+function handleDropOut(slotId, docentName) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return ContentService.createTextOutput(JSON.stringify({ error: 'Server busy, try again.' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var schedSheet = ss.getSheetByName(SHEET_SCHEDULE);
+    var docentSheet = ss.getSheetByName(SHEET_DOCENTS);
+
+    var schedData = schedSheet.getDataRange().getValues();
+
+    var slotRow = -1;
+    for (var i = 1; i < schedData.length; i++) {
+      if (schedData[i][0].toString() === slotId) { slotRow = i; break; }
+    }
+    if (slotRow === -1) {
+      return ContentService.createTextOutput(JSON.stringify({ error: 'Slot not found.' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var status = schedData[slotRow][5].toString();
+    if (status !== 'Assigned') {
+      return ContentService.createTextOutput(JSON.stringify({ error: 'This tour is not in Assigned status.' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var assignedRaw = schedData[slotRow][6].toString();
+    var assignedList = assignedRaw.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
+
+    if (assignedList.indexOf(docentName) === -1) {
+      return ContentService.createTextOutput(JSON.stringify({ error: 'You are not assigned to this tour.' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Remove this docent from the assigned list
+    var remaining = assignedList.filter(function(n) { return n !== docentName; });
+    schedSheet.getRange(slotRow + 1, 7).setValue(remaining.join(', '));
+
+    // Set status to Needs Sub
+    schedSheet.getRange(slotRow + 1, 6).setValue('Needs Sub');
+
+    // Decrement tour count
+    var docentData = docentSheet.getDataRange().getValues();
+    for (var i = 1; i < docentData.length; i++) {
+      if (docentData[i][0].toString() === docentName) {
+        var currentCount = docentData[i][2] || 0;
+        if (currentCount > 0) {
+          docentSheet.getRange(i + 1, 3).setValue(currentCount - 1);
+        }
+        break;
+      }
+    }
+
+    // Notify Kathy
+    MailApp.sendEmail(
+      KATHY_EMAIL,
+      'Docent dropped out: ' + docentName + ' - ' + schedData[slotRow][3] + ' on ' + formatDateNice(new Date(schedData[slotRow][1])),
+      docentName + ' has dropped out of the ' + schedData[slotRow][3] + ' tour on ' +
+      formatDateNice(new Date(schedData[slotRow][1])) + ' at ' + formatTime(schedData[slotRow][2]) + '.\n\n' +
+      'The system has set this slot to "Needs Sub" and is emailing available docents automatically.\n\n' +
+      (remaining.length > 0 ? 'Still assigned: ' + remaining.join(', ') : 'No docents remaining on this slot.') +
+      '\n\n-- Tour Scheduler'
+    );
+
+    // Trigger the sub outreach directly (onEdit won't fire from programmatic changes)
+    handleNeedsSub(ss, schedSheet, slotRow);
+
+    return ContentService.createTextOutput(JSON.stringify({ ok: true }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+// =====================
+// WITHDRAW (remove signup/offer before assignment)
+// =====================
+function handleWithdraw(slotId, docentName) {
+  var lock = LockService.getScriptLock();
+  try {
+    lock.waitLock(10000);
+  } catch (e) {
+    return ContentService.createTextOutput(JSON.stringify({ error: 'Server busy, try again.' }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var signupSheet = ss.getSheetByName(SHEET_SIGNUPS);
+    var signupData = signupSheet.getDataRange().getValues();
+
+    var rowsToDelete = [];
+    for (var i = 1; i < signupData.length; i++) {
+      if ((signupData[i][1] || '').toString() === docentName &&
+          (signupData[i][2] || '').toString() === slotId) {
+        rowsToDelete.push(i + 1);
+      }
+    }
+
+    if (rowsToDelete.length === 0) {
+      return ContentService.createTextOutput(JSON.stringify({ error: 'Signup not found.' }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Delete bottom-up so row indices stay valid
+    rowsToDelete.sort(function(a, b) { return b - a; });
+    for (var i = 0; i < rowsToDelete.length; i++) {
+      signupSheet.deleteRow(rowsToDelete[i]);
     }
 
     return ContentService.createTextOutput(JSON.stringify({ ok: true }))
