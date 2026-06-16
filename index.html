@@ -543,7 +543,16 @@ async function loadData() {
     const resp = await fetch(WEB_APP_URL);
     const data = await resp.json();
     allDocents = data.docents || [];
-    allSlots = data.slots || [];
+    // Deduplicate by slotId (in case sheet has duplicate rows)
+    var rawSlots = data.slots || [];
+    var seenIds = {};
+    allSlots = [];
+    rawSlots.forEach(function(s) {
+      if (!seenIds[s.slotId]) {
+        seenIds[s.slotId] = true;
+        allSlots.push(s);
+      }
+    });
     tourTagMap = data.tourTagMap || {};
 
     allSlots.forEach(s => { s.time = cleanTime(s.time); });
