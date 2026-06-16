@@ -851,8 +851,7 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
           html += '<span class="tour-tag tag-you">YOU</span>';
         } else if (isAssigned) {
           var aNames = slot.assigned.split(',').map(function(s) { return s.trim(); }).filter(Boolean);
-          var aDisplay = aNames.length <= 2 ? aNames.join(', ') : aNames[0] + ' +' + (aNames.length - 1);
-          html += '<span class="tour-assigned-names">' + escapeHtml(aDisplay) + '</span>';
+          html += '<span class="tour-assigned-names">' + aNames.map(escapeHtml).join(', ') + '</span>';
         } else if (isSub) {
           html += '<button class="tag-claim" onclick="claimSlot(\'' + slot.slotId + '\', this)">Claim</button>';
         }
