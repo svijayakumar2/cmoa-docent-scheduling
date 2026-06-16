@@ -449,6 +449,18 @@ const DAY_NAMES = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','
 const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const SHORT_MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 
+function timeToMinutes(t) {
+  if (!t) return 9999;
+  const m = t.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!m) return 9999;
+  let h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  const ampm = m[3].toUpperCase();
+  if (ampm === 'PM' && h !== 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+  return h * 60 + min;
+}
+
 function fullDate(d) {
   const dt = new Date(d);
   return DAY_NAMES[dt.getDay()] + ', ' + MONTH_NAMES[dt.getMonth()] + ' ' + dt.getDate();
@@ -702,7 +714,10 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
       daySlots = daySlots.filter(s => s.tourType === tourTypeFilter);
     }
 
-    daySlots.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
+    // Skip past days
+    if (dk < todayStr) continue;
+
+    daySlots.sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
 
     html += '<div class="day-section">';
     html += '<div class="day-header' + (isToday ? ' today' : '') + '">' + fullDate(day) + (isToday ? ' (Today)' : '') + '</div>';
