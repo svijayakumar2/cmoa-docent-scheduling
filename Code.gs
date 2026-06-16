@@ -35,6 +35,12 @@ function isValidEmail(email) {
   return email && email.toString().indexOf('@') !== -1;
 }
 
+// Get midnight today in Eastern timezone (so date comparisons match sheet dates)
+function getTodayET() {
+  var todayStr = Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM-dd');
+  return Utilities.parseDate(todayStr, TIMEZONE, 'yyyy-MM-dd');
+}
+
 function formatDateNice(date) {
   return Utilities.formatDate(date, TIMEZONE, 'EEEE, MMMM d');
 }
@@ -209,8 +215,7 @@ function buildSchedulePayload() {
   }
 
   // Build slot list
-  var today = new Date();
-  today.setHours(0, 0, 0, 0);
+  var today = getTodayET();
   var slots = [];
   for (var i = 1; i < schedData.length; i++) {
     var row = schedData[i];
@@ -520,8 +525,7 @@ function runAutoAssignment() {
   var docentData = docentSheet.getDataRange().getValues();
   var signupData = signupSheet.getDataRange().getValues();
 
-  var today = new Date();
-  today.setHours(0, 0, 0, 0);
+  var today = getTodayET();
   var tally = {};
   for (var i = 1; i < docentData.length; i++) {
     var name = (docentData[i][0] || '').toString();
@@ -750,8 +754,7 @@ function handleNeedsSub(ss, schedSheet, row) {
   var originallyAssigned = schedData[6].toString();
 
   var docentData = docentSheet.getDataRange().getValues();
-  var today = new Date();
-  today.setHours(0, 0, 0, 0);
+  var today = getTodayET();
   var emailMap = {};
   var unavailMap = {};
   var certMap = {};
@@ -877,8 +880,7 @@ function sendDailyDigest() {
   var docentData = docentSheet.getDataRange().getValues();
   var signupData = signupSheet.getDataRange().getValues();
 
-  var today = new Date();
-  today.setHours(0, 0, 0, 0);
+  var today = getTodayET();
   var cutoff = new Date(today.getTime() + AUTO_ASSIGN_DAYS_OUT * 86400000);
   var day7 = new Date(today.getTime() + 7 * 86400000).getTime();
   var day2 = new Date(today.getTime() + 2 * 86400000).getTime();
@@ -925,8 +927,10 @@ function sendDailyDigest() {
     var status = (row[5] || '').toString();
     var assignedStr = (row[6] || '').toString();
 
-    date.setHours(0, 0, 0, 0);
-    var t = date.getTime();
+    // Normalize date to midnight Eastern for comparison with day7/day2
+    var dateStr = formatDateISO(date);
+    var dateNorm = Utilities.parseDate(dateStr, TIMEZONE, 'yyyy-MM-dd');
+    var t = dateNorm.getTime();
 
     // --- REMINDERS: assigned tours coming up in 2 or 7 days ---
     if (status === 'Assigned' && (t === day7 || t === day2)) {
