@@ -190,13 +190,22 @@ function buildSchedulePayload() {
   for (var i = 1; i < docentData.length; i++) {
     if (docentData[i][0]) {
       var certRaw = (docentData[i][5] || '').toString().trim();
+      var unavailRaw = docentData[i][4];
+      var unavailStr = '';
+      if (unavailRaw) {
+        var unavailDate = new Date(unavailRaw);
+        if (!isNaN(unavailDate.getTime())) {
+          unavailStr = Utilities.formatDate(unavailDate, TIMEZONE, 'yyyy-MM-dd');
+        }
+      }
       docents.push({
         name: docentData[i][0].toString(),
         certifiedTours: certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null,
         leadEligible: (docentData[i][8] || '').toString().toLowerCase() === 'yes',
         preferredDays: (docentData[i][6] || '').toString(),
         avoidDays: (docentData[i][7] || '').toString(),
-        lastMinute: (docentData[i][9] || '').toString().toLowerCase() === 'yes'
+        lastMinute: (docentData[i][9] || '').toString().toLowerCase() === 'yes',
+        unavailableUntil: unavailStr
       });
     }
   }
@@ -361,6 +370,8 @@ function handleSavePreferences(docentName, prefs) {
 
     for (var i = 1; i < docentData.length; i++) {
       if ((docentData[i][0] || '').toString() === docentName) {
+        // Column E (5): Unavailable Until
+        docentSheet.getRange(i + 1, 5).setValue(prefs.unavailableUntil || '');
         // Column G (7): Preferred Days
         docentSheet.getRange(i + 1, 7).setValue(prefs.preferredDays || '');
         // Column H (8): Avoid Days
@@ -1133,9 +1144,13 @@ function sendDailyDigest() {
     }
 
     if (d.needsFilling.length > 0) {
-      body += 'TOURS THAT NEED DOCENTS:\n';
-      for (var j = 0; j < d.needsFilling.length; j++) {
-        body += '  - ' + d.needsFilling[j] + '\n';
+      if (d.needsFilling.length <= 5) {
+        body += 'TOURS THAT NEED DOCENTS:\n';
+        for (var j = 0; j < d.needsFilling.length; j++) {
+          body += '  - ' + d.needsFilling[j] + '\n';
+        }
+      } else {
+        body += 'There are ' + d.needsFilling.length + ' tours that need docents in the next few days.';
       }
       body += '\nIf you can help, sign up here: ' + SITE_URL + '\n\n';
     }

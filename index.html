@@ -968,6 +968,7 @@ function renderPreferences() {
   var preferred = (info.preferredDays || '').toString().toLowerCase().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
   var avoid = (info.avoidDays || '').toString().toLowerCase().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
   var lastMinute = info.lastMinute || false;
+  var unavailUntil = info.unavailableUntil || '';
 
   var days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
   var dayLabels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
@@ -1005,6 +1006,21 @@ function renderPreferences() {
   html += '<p style="margin-top:0.5rem;">If checked, you may be contacted when a tour suddenly needs a substitute, even on days you haven\'t listed as preferred.</p>';
   html += '</div>';
 
+  html += '<div class="pref-section">';
+  html += '<h3>I\'ll Be Away</h3>';
+  html += '<p>Going on vacation? Set a return date and you won\'t receive any tour emails or assignments until then.</p>';
+  html += '<div style="display:flex; align-items:center; gap:0.75rem; margin-top:0.5rem;">';
+  html += '<label for="pref-unavail">Unavailable until:</label>';
+  html += '<input type="date" id="pref-unavail" value="' + unavailUntil + '" style="font-family:inherit; font-size:0.9rem; padding:0.3rem 0.5rem; border:1px solid #ccc; border-radius:4px;">';
+  if (unavailUntil) {
+    html += '<button onclick="document.getElementById(\'pref-unavail\').value=\'\'" style="font-size:0.8rem; color:#c44; background:none; border:none; cursor:pointer; font-family:inherit;">Clear</button>';
+  }
+  html += '</div>';
+  if (unavailUntil && unavailUntil >= dateKey(new Date())) {
+    html += '<p style="margin-top:0.5rem; color:#c44; font-weight:500;">You are currently marked as away until ' + unavailUntil + '.</p>';
+  }
+  html += '</div>';
+
   html += '<div class="pref-save-area">';
   html += '<button class="btn btn-primary" id="pref-save-btn" onclick="savePreferences()">Save Preferences</button>';
   html += '</div>';
@@ -1034,6 +1050,7 @@ async function savePreferences() {
   });
 
   var lastMinute = document.getElementById('pref-lastminute').checked;
+  var unavailUntil = document.getElementById('pref-unavail').value || '';
 
   try {
     var resp = await fetch(WEB_APP_URL, {
@@ -1045,7 +1062,8 @@ async function savePreferences() {
         preferences: {
           preferredDays: preferred.join(', '),
           avoidDays: avoid.join(', '),
-          lastMinute: lastMinute
+          lastMinute: lastMinute,
+          unavailableUntil: unavailUntil
         }
       })
     });
@@ -1055,6 +1073,7 @@ async function savePreferences() {
         docentInfoMap[currentDocent].preferredDays = preferred.join(', ');
         docentInfoMap[currentDocent].avoidDays = avoid.join(', ');
         docentInfoMap[currentDocent].lastMinute = lastMinute;
+        docentInfoMap[currentDocent].unavailableUntil = unavailUntil;
       }
       showMessage('Preferences saved.', 'success');
     } else {
