@@ -242,7 +242,7 @@
     .tour-row.urgent { border-left: 3px solid #c4713b; font-weight: 600; }
     .tour-row.uncertified { opacity: 0.5; }
 
-    .tour-time { font-weight: 600; min-width: 70px; flex-shrink: 0; }
+    .tour-time { font-weight: 600; min-width: 120px; flex-shrink: 0; }
     .tour-type { flex: 1; }
     .tour-meta {
       width: 100%;
@@ -441,7 +441,7 @@
 </div>
 
 <script>
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzjnIL03L6tQJwd7kYaqiKy5aDPXBo5NyChmZeTJqxPvYHeCWi8-uQa-VVzUnzV_3msCQ/exec';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzDw-Zf2hWSTYYlMB7hAnvSTIitHDiN95YE80DafbjFeui6fPHqUEcEepzYIBW-Tyk-vg/exec';
 
 let currentDocent = localStorage.getItem('cmoa_docent_name') || '';
 let allSlots = [];
@@ -820,7 +820,7 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
           }
         }
 
-        html += '<span class="tour-time">' + escapeHtml(slot.time) + '</span>';
+        html += '<span class="tour-time">' + escapeHtml(slot.timeDisplay || slot.time) + '</span>';
         html += '<span class="tour-type">' + escapeHtml(slot.tourType) + '</span>';
 
         // Counts
@@ -883,7 +883,7 @@ function renderMyTours(myTours) {
     html += '<div class="list-card your-tour">';
     html += '<div class="lc-info">';
     html += '<div class="lc-tour">' + escapeHtml(slot.tourType) + '</div>';
-    html += '<div class="lc-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.time) + '</div>';
+    html += '<div class="lc-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.timeDisplay || slot.time) + '</div>';
 
     // Show metadata if present
     let meta = [];
@@ -929,7 +929,7 @@ function renderOffered(offeredSlots) {
     html += '<div class="list-card offered-tour">';
     html += '<div class="lc-info">';
     html += '<div class="lc-tour">' + escapeHtml(slot.tourType) + '</div>';
-    html += '<div class="lc-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.time) + '</div>';
+    html += '<div class="lc-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.timeDisplay || slot.time) + '</div>';
     html += '<div class="lc-meta">' + n + ' of ' + needed + ' available &mdash; pending assignment</div>';
     html += '</div>';
     html += '<button class="btn-withdraw" onclick="withdrawOffer(\'' + escapeHtml(slot.slotId) + '\', this)">Withdraw</button>';
@@ -947,7 +947,7 @@ function renderNeedsSub(needsSubSlots) {
     html += '<div class="list-card sub-needed">';
     html += '<div class="lc-info">';
     html += '<div class="lc-tour">' + escapeHtml(slot.tourType) + '</div>';
-    html += '<div class="lc-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.time) + '</div>';
+    html += '<div class="lc-date">' + escapeHtml(slot.dateDisplay) + ' at ' + escapeHtml(slot.timeDisplay || slot.time) + '</div>';
 
     let meta = [];
     if (slot.focusArea) meta.push(slot.focusArea);

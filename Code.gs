@@ -1,7 +1,7 @@
 // === CONFIGURATION ===
 const KATHY_EMAIL = 'saranyav196@gmail.com';
 const CLAIM_WINDOW_DAYS = 5;
-const AUTO_ASSIGN_DAYS_OUT = 5;
+const AUTO_ASSIGN_DAYS_OUT = 14;
 
 const SHEET_SCHEDULE   = 'Schedule';
 const SHEET_DOCENTS    = 'Docents';
@@ -23,6 +23,16 @@ var TOUR_TAG_MAP = {
   'ci activation tour': 'ci',
   'school tour': 'sch'
 };
+
+// Tour duration in minutes by type (default 60 min)
+var TOUR_DURATION_MAP = {
+  'permanent collection (30 min tour)': 30
+};
+var DEFAULT_TOUR_DURATION = 60;
+
+function getTourDuration(tourType) {
+  return TOUR_DURATION_MAP[(tourType || '').toLowerCase()] || DEFAULT_TOUR_DURATION;
+}
 
 // Use the spreadsheet's timezone (Eastern) so dates/times don't shift
 // when the script is run by someone in a different timezone
@@ -73,27 +83,54 @@ function formatTime(val) {
   return val.toString();
 }
 
-function parseTimeRange(timeVal, date) {
-  var start = new Date(date);
-  start.setHours(13, 0, 0, 0);
+function formatTimeRange(timeVal, tourType) {
+  var startStr = formatTime(timeVal);
+  if (!startStr) return startStr;
+  var duration = getTourDuration(tourType);
+  var match = startStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!match) return startStr;
+  var startHour = parseInt(match[1]);
+  var startMin = parseInt(match[2]);
+  var startAmpm = match[3].toUpperCase();
+  var h24 = startHour;
+  if (startAmpm === 'PM' && startHour !== 12) h24 += 12;
+  if (startAmpm === 'AM' && startHour === 12) h24 = 0;
+  var endTotalMin = h24 * 60 + startMin + duration;
+  var endH24 = Math.floor(endTotalMin / 60) % 24;
+  var endMin = endTotalMin % 60;
+  var endAmpm = endH24 >= 12 ? 'PM' : 'AM';
+  var endH12 = endH24 > 12 ? endH24 - 12 : (endH24 === 0 ? 12 : endH24);
+  var endStr = endH12 + ':' + (endMin < 10 ? '0' : '') + endMin + ' ' + endAmpm;
+  if (startAmpm === endAmpm) {
+    return startHour + ':' + match[2] + '-' + endStr;
+  }
+  return startStr + '-' + endStr;
+}
+
+function parseTimeRange(timeVal, date, durationMinutes) {
+  durationMinutes = durationMinutes || DEFAULT_TOUR_DURATION;
+  var dateStr = Utilities.formatDate(new Date(date), TIMEZONE, 'yyyy-MM-dd');
+  var hour = 13, minute = 0;
 
   if (timeVal instanceof Date) {
-    start.setHours(timeVal.getHours(), timeVal.getMinutes(), 0, 0);
-    var end = new Date(start.getTime() + 3600000);
-    return [start, end];
+    hour = parseInt(Utilities.formatDate(timeVal, TIMEZONE, 'HH'));
+    minute = parseInt(Utilities.formatDate(timeVal, TIMEZONE, 'mm'));
+  } else {
+    var timeStr = (timeVal || '').toString();
+    var match = timeStr.match(/(\d+)(?::(\d+))?\s*(AM|PM)?/i);
+    if (match) {
+      hour = parseInt(match[1]);
+      minute = parseInt(match[2] || '0');
+      var ampm = (match[3] || '').toUpperCase();
+      if (ampm === 'PM' && hour < 12) hour += 12;
+      if (ampm === 'AM' && hour === 12) hour = 0;
+    }
   }
 
-  var timeStr = (timeVal || '').toString();
-  var match = timeStr.match(/(\d+)(?::(\d+))?\s*(AM|PM)?/i);
-  if (match) {
-    var hour = parseInt(match[1]);
-    var minute = parseInt(match[2] || '0');
-    var ampm = (match[3] || '').toUpperCase();
-    if (ampm === 'PM' && hour < 12) hour += 12;
-    if (ampm === 'AM' && hour === 12) hour = 0;
-    start.setHours(hour, minute, 0, 0);
-  }
-  var end = new Date(start.getTime() + 3600000);
+  var hh = (hour < 10 ? '0' : '') + hour;
+  var mm = (minute < 10 ? '0' : '') + minute;
+  var start = Utilities.parseDate(dateStr + ' ' + hh + ':' + mm, TIMEZONE, 'yyyy-MM-dd HH:mm');
+  var end = new Date(start.getTime() + durationMinutes * 60000);
   return [start, end];
 }
 
@@ -113,6 +150,65 @@ function dayListContains(dayList, dayNum) {
 }
 
 // =====================
+// TRIGGER SETUP (safe to re-run — skips triggers that already exist)
+// =====================
+function setupTriggers() {
+  var existing = ScriptApp.getProjectTriggers();
+  var existingHandlers = {};
+  for (var i = 0; i < existing.length; i++) {
+    existingHandlers[existing[i].getHandlerFunction()] = true;
+  }
+
+  // Daily auto-assignment at 6 AM Eastern
+  if (!existingHandlers['runAutoAssignment']) {
+    ScriptApp.newTrigger('runAutoAssignment')
+      .timeBased()
+      .atHour(6)
+      .everyDays(1)
+      .inTimezone(TIMEZONE)
+      .create();
+  }
+
+  // Daily digest at 7 AM Eastern
+  if (!existingHandlers['sendDailyDigest']) {
+    ScriptApp.newTrigger('sendDailyDigest')
+      .timeBased()
+      .atHour(7)
+      .everyDays(1)
+      .inTimezone(TIMEZONE)
+      .create();
+  }
+
+  // Check expired claims daily at 8 AM Eastern
+  if (!existingHandlers['checkExpiredClaims']) {
+    ScriptApp.newTrigger('checkExpiredClaims')
+      .timeBased()
+      .atHour(8)
+      .everyDays(1)
+      .inTimezone(TIMEZONE)
+      .create();
+  }
+
+  // Daily backup at 2 AM Eastern
+  if (!existingHandlers['dailyBackup']) {
+    ScriptApp.newTrigger('dailyBackup')
+      .timeBased()
+      .atHour(2)
+      .everyDays(1)
+      .inTimezone(TIMEZONE)
+      .create();
+  }
+
+  // Installable onEdit trigger for status changes
+  if (!existingHandlers['onEditInstallable']) {
+    ScriptApp.newTrigger('onEditInstallable')
+      .forSpreadsheet(SpreadsheetApp.getActiveSpreadsheet())
+      .onEdit()
+      .create();
+  }
+}
+
+// =====================
 // MENU
 // =====================
 function onOpen() {
@@ -122,6 +218,7 @@ function onOpen() {
     .addItem('Send Daily Digest Now', 'sendDailyDigest')
     .addItem('Check Expired Claims', 'checkExpiredClaims')
     .addItem('Backup Now', 'dailyBackup')
+    .addItem('Setup Triggers', 'setupTriggers')
     .addToUi();
 }
 
@@ -255,6 +352,7 @@ function buildSchedulePayload() {
       date: formatDateISO(date),
       dateDisplay: formatDateNice(date),
       time: formatTime(row[2]),
+      timeDisplay: formatTimeRange(row[2], tourType),
       tourType: tourType,
       docentsNeeded: docentsNeeded,
       status: status,
@@ -598,7 +696,7 @@ function handleDropOut(slotId, docentName) {
       KATHY_EMAIL,
       'Docent dropped out: ' + docentName + ' - ' + schedData[slotRow][3] + ' on ' + formatDateNice(new Date(schedData[slotRow][1])),
       docentName + ' has dropped out of the ' + schedData[slotRow][3] + ' tour on ' +
-      formatDateNice(new Date(schedData[slotRow][1])) + ' at ' + formatTime(schedData[slotRow][2]) + '.\n\n' +
+      formatDateNice(new Date(schedData[slotRow][1])) + ' at ' + formatTimeRange(schedData[slotRow][2], schedData[slotRow][3].toString()) + '.\n\n' +
       'The system has set this slot to "Needs Sub" and is emailing available docents automatically.\n\n' +
       (remaining.length > 0 ? 'Still assigned: ' + remaining.join(', ') : 'No docents remaining on this slot.') +
       '\n\n-- Tour Scheduler'
@@ -714,7 +812,7 @@ function runAutoAssignment() {
     if ((schedData[i][5] || '').toString() !== 'Assigned') continue;
     var aDate = new Date(schedData[i][1]);
     var aDateKey = formatDateISO(aDate);
-    var aTimes = parseTimeRange(schedData[i][2], aDate);
+    var aTimes = parseTimeRange(schedData[i][2], aDate, getTourDuration((schedData[i][3] || '').toString()));
     var aNames = (schedData[i][6] || '').toString().split(',').map(function(s) { return s.trim(); });
     for (var j = 0; j < aNames.length; j++) {
       var key = aNames[j] + '|' + aDateKey;
@@ -736,7 +834,7 @@ function runAutoAssignment() {
     if (status !== '' && status !== 'Open') continue;
     if (date > cutoff || date < today) continue;
 
-    var slotTimes = parseTimeRange(timeRaw, date);
+    var slotTimes = parseTimeRange(timeRaw, date, getTourDuration(tourType));
     var slotStart = slotTimes[0].getTime();
     var slotEnd = slotTimes[1].getTime();
     var slotDateKey = formatDateISO(date);
@@ -757,9 +855,7 @@ function runAutoAssignment() {
         if (!isCertifiedFor(tally[n], tourType)) return false;
         var key = n + '|' + slotDateKey;
         var existing = assignedTimes[key] || [];
-        for (var k = 0; k < existing.length; k++) {
-          if (slotStart < existing[k][1] && slotEnd > existing[k][0]) return false;
-        }
+        if (existing.length > 0) return false; // max one assignment per day
         return true;
       }).sort(function(a, b) { return tally[a].count - tally[b].count; });
     }
@@ -849,7 +945,7 @@ function handleTourCancelled(ss, schedSheet, row) {
   var schedData = schedSheet.getRange(row, 1, 1, 7).getValues()[0];
   var tourType = schedData[3].toString();
   var date = new Date(schedData[1]);
-  var time = formatTime(schedData[2]);
+  var time = formatTimeRange(schedData[2], tourType);
   var originallyAssigned = schedData[6].toString();
 
   var docentData = docentSheet.getDataRange().getValues();
@@ -895,7 +991,7 @@ function handleNeedsSub(ss, schedSheet, row) {
   var slotId = schedData[0].toString();
   var tourType = schedData[3].toString();
   var date = new Date(schedData[1]);
-  var time = formatTime(schedData[2]);
+  var time = formatTimeRange(schedData[2], tourType);
   var originallyAssigned = schedData[6].toString();
 
   var docentData = docentSheet.getDataRange().getValues();
@@ -1065,8 +1161,8 @@ function sendDailyDigest() {
     var row = schedData[i];
     var slotId = (row[0] || '').toString();
     var date = new Date(row[1]);
-    var time = formatTime(row[2]);
     var tourType = (row[3] || '').toString();
+    var time = formatTimeRange(row[2], tourType);
     var docentsNeeded = row[4] || 1;
     if (typeof docentsNeeded !== 'number') docentsNeeded = 1;
     var status = (row[5] || '').toString();
@@ -1202,7 +1298,7 @@ function checkExpiredClaims() {
           'Slot: ' + slotId + '\n' +
           'Tour: ' + schedData[j][3] + '\n' +
           'Date: ' + formatDateNice(new Date(schedData[j][1])) + '\n' +
-          'Time: ' + formatTime(schedData[j][2]) + '\n\n' +
+          'Time: ' + formatTimeRange(schedData[j][2], (schedData[j][3] || '').toString()) + '\n\n' +
           'Please assign manually.'
         );
         cancelSheet.getRange(i + 1, 4).setValue('Escalated');
@@ -1217,7 +1313,7 @@ function checkExpiredClaims() {
 // =====================
 function sendCalendarInvite(email, name, slotId, date, timeStr, tourType) {
   if (!isValidEmail(email)) return;
-  var times = parseTimeRange(timeStr, date);
+  var times = parseTimeRange(timeStr, date, getTourDuration(tourType));
   CalendarApp.getDefaultCalendar().createEvent(
     'Tour: ' + tourType,
     times[0],
