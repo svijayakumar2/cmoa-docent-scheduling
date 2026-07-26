@@ -869,6 +869,7 @@ function runAutoAssignment() {
     var tourAssigned = [];
     var leadAssigned = [];
     var participantAssigned = [];
+    var promotedLeads = [];
 
     if (hasMindfulRoles) {
       var deskSignups = (roleMap[slotId] && roleMap[slotId]['desk']) || [];
@@ -884,10 +885,30 @@ function runAutoAssignment() {
       leadSignups = leadSignups.filter(function(n) { return tally[n] && tally[n].leadEligible; });
       var participantSignups = (roleMap[slotId] && roleMap[slotId]['participant']) || [];
       leadAssigned = filterEligible(leadSignups).slice(0, neededLead);
+
+      // Nobody volunteered to lead: promote a lead-eligible docent who
+      // signed up as a participant (fewest tours first)
+      if (leadAssigned.length < neededLead) {
+        var promotable = participantSignups.filter(function(n) {
+          return tally[n] && tally[n].leadEligible && leadAssigned.indexOf(n) === -1;
+        });
+        promotedLeads = filterEligible(promotable).slice(0, neededLead - leadAssigned.length);
+        leadAssigned = leadAssigned.concat(promotedLeads);
+      }
+
       var leadSet = {};
       for (var j = 0; j < leadAssigned.length; j++) leadSet[leadAssigned[j]] = true;
       participantAssigned = filterEligible(participantSignups.filter(function(n) { return !leadSet[n]; })).slice(0, neededParticipant);
-      assigned = leadAssigned.concat(participantAssigned);
+
+      if (leadAssigned.length === 0) {
+        // No eligible lead available at all. Do NOT assign the slot -- leave
+        // it Open so the daily digest keeps advertising it to lead-eligible
+        // docents -- and escalate to Kathy (once per slot).
+        escalateNoLead(slotId, tourType, date, timeRaw);
+        assigned = [];
+      } else {
+        assigned = leadAssigned.concat(participantAssigned);
+      }
     } else {
       assigned = filterEligible(signups).slice(0, docentsNeeded);
     }
@@ -917,8 +938,50 @@ function runAutoAssignment() {
         if (!assignedTimes[key]) assignedTimes[key] = [];
         assignedTimes[key].push([slotStart, slotEnd]);
       }
+
+      // Tell promoted leads they are leading (they signed up as participants)
+      for (var j = 0; j < promotedLeads.length; j++) {
+        var pName = promotedLeads[j];
+        if (isValidEmail(tally[pName].email)) {
+          MailApp.sendEmail(
+            tally[pName].email,
+            'You are the Tour Lead: ' + tourType + ' on ' + formatDateNice(date),
+            'Hi ' + pName + ',\n\n' +
+            'You signed up as a participant for the ' + tourType + ' on ' +
+            formatDateNice(date) + ' at ' + formatTimeRange(timeRaw, tourType) + '. ' +
+            'No one volunteered to lead this tour, and since you are lead-certified ' +
+            'you have been assigned as the Tour Lead.\n\n' +
+            'If you cannot lead this tour, contact Kathy as soon as possible.\n\n' +
+            '-- Tour Scheduler'
+          );
+        }
+      }
     }
   }
+}
+
+// A school tour is inside the assignment window but no lead-eligible docent
+// has signed up (as lead or participant). Email Kathy once per slot.
+function escalateNoLead(slotId, tourType, date, timeRaw) {
+  var props = PropertiesService.getScriptProperties();
+  var key = 'noLeadEscalated_' + slotId;
+  if (props.getProperty(key)) return;
+  props.setProperty(key, formatDateISO(new Date()));
+
+  MailApp.sendEmail(
+    KATHY_EMAIL,
+    'School tour needs a lead: ' + tourType + ' on ' + formatDateNice(date),
+    'A school tour is coming up within ' + AUTO_ASSIGN_DAYS_OUT + ' days, but no ' +
+    'lead-eligible docent has signed up for it (as lead or participant).\n\n' +
+    'Slot: ' + slotId + '\n' +
+    'Tour: ' + tourType + '\n' +
+    'Date: ' + formatDateNice(date) + '\n' +
+    'Time: ' + formatTimeRange(timeRaw, tourType) + '\n\n' +
+    'The tour will stay open until a lead signs up. To assign a lead yourself, ' +
+    'type their name in the Assigned column (G) and the Tour Lead column (I), ' +
+    'then set Status (F) to Assigned.\n\n' +
+    '-- Tour Scheduler'
+  );
 }
 
 // =====================
