@@ -412,6 +412,49 @@
     .btn-withdraw:hover { background: #f5f5f5; }
     .btn-withdraw:disabled { opacity: 0.5; cursor: default; }
 
+    /* Monthly calendar grid */
+    .cal-grid {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      background: #fff;
+      border: 1px solid #bbb;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .cal-dow {
+      background: #1a3a4a;
+      color: #fff;
+      text-align: center;
+      padding: 0.35rem 0.2rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+    }
+    .cal-cell {
+      border: 1px solid #e2e2dd;
+      min-height: 96px;
+      padding: 3px 4px;
+      font-size: 0.7rem;
+      background: #fff;
+    }
+    .cal-cell.other-month { background: #f5f5f2; }
+    .cal-cell.other-month .cal-daynum { color: #ccc; }
+    .cal-cell.cal-today { background: #eef7ee; }
+    .cal-daynum { font-weight: 700; font-size: 0.8rem; color: #1a3a4a; margin-bottom: 2px; }
+    .cal-slot {
+      margin-bottom: 3px;
+      padding: 2px 4px;
+      border-radius: 3px;
+      line-height: 1.3;
+    }
+    .cal-slot.open { background: #eaf2ea; }
+    .cal-slot.assigned { background: #e8eef5; }
+    .cal-slot.needs-sub { background: #fde8d8; font-weight: 600; }
+    .cal-slot.cancelled { background: #f2f2f2; color: #999; text-decoration: line-through; }
+    .cal-slot-time { font-weight: 700; }
+    .cal-slot-names { color: #2c4a2c; }
+    .cal-print-title { display: none; }
+    .cal-print-btn-wrap { text-align: right; margin-bottom: 0.5rem; }
+
     @media (max-width: 600px) {
       header { flex-direction: column; align-items: flex-start; }
       .header-controls select { width: 100%; }
@@ -420,12 +463,29 @@
     }
 
     @media print {
-      header, .tabs, .week-nav, .filter-bar, .save-bar, .btn-print, .btn-dropout, .name-search-wrap { display: none !important; }
+      header, .tabs, .week-nav, .filter-bar, .save-bar, .btn-print, .btn-dropout, .name-search-wrap, .cal-print-btn-wrap, .cal-browse-back { display: none !important; }
       body { background: #fff; font-size: 12pt; }
       .container { max-width: none; padding: 0; }
       .list-card { break-inside: avoid; border: 1px solid #ccc; box-shadow: none; }
       .day-section { break-inside: avoid; }
       .tour-row input[type="checkbox"], .role-select, .tag-claim { display: none; }
+
+      /* Monthly calendar print (for posting in the docent room) */
+      .cal-print-title {
+        display: block;
+        text-align: center;
+        font-size: 16pt;
+        font-weight: 700;
+        margin-bottom: 8pt;
+      }
+      .cal-grid { border: 1.5pt solid #000; border-radius: 0; }
+      .cal-dow { background: #fff !important; color: #000; border-bottom: 1pt solid #000; font-size: 10pt; }
+      .cal-cell { border: 0.5pt solid #555; min-height: 78pt; font-size: 7.5pt; background: #fff !important; }
+      .cal-cell.other-month { background: #fff !important; }
+      .cal-daynum { font-size: 9pt; color: #000; }
+      .cal-slot { background: #fff !important; border: 0.5pt solid #999; border-radius: 0; }
+      .cal-slot.needs-sub { border: 1.5pt solid #000; }
+      .cal-slot-names { color: #000; }
     }
   </style>
 </head>
@@ -452,6 +512,8 @@ let tourTagMap = {};
 let selectedSlots = new Set();
 let selectedRoles = {};  // slotId -> 'desk' or 'tour'
 let currentWeekStart = getMonday(new Date());
+let currentMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let browsing = false;  // viewing the monthly calendar without picking a name
 let activeTab = 'calendar';
 let tourTypeFilter = '';
 
@@ -634,20 +696,35 @@ function render() {
   const app = document.getElementById('app');
 
   if (!currentDocent) {
-    const docentNames = allDocents.map(d => (typeof d === 'string') ? d : d.name);
+    if (browsing) {
+      app.style.maxWidth = '1100px';
+      app.innerHTML = '<div class="cal-browse-back" style="text-align:center; margin-bottom:0.75rem;">' +
+        '<a href="#" onclick="browsing=false; render(); return false;" style="font-size:0.9rem; color:#1a3a4a;">&larr; Back to name entry</a>' +
+        '</div>' + renderMonth();
+      removeSaveBar();
+      return;
+    }
+    app.style.maxWidth = '';
     app.innerHTML = '<div class="name-search-wrap">' +
       '<h2>Welcome!</h2>' +
       '<p>Start typing your name to get started.</p>' +
       '<input class="name-search-input" type="text" placeholder="Type your name..." oninput="searchName(this.value)" autofocus>' +
       '<div class="name-results" id="name-results"></div>' +
+      '<p style="margin-top:1.5rem;"><a href="#" onclick="browsing=true; render(); return false;" style="font-size:0.9rem; color:#1a3a4a;">Just want to see the schedule? View the monthly calendar</a></p>' +
       '</div>';
     removeSaveBar();
     return;
   }
 
-  const openSlots = allSlots.filter(s => s.status === '' || s.status === 'Open');
-  const needsSubSlots = allSlots.filter(s => s.status === 'Needs Sub');
-  const assignedSlots = allSlots.filter(s => s.status === 'Assigned');
+  app.style.maxWidth = (activeTab === 'month') ? '1100px' : '';
+
+  // Past slots (from earlier this month) only appear on the monthly calendar
+  const todayKeyStr = dateKey(new Date());
+  const futureSlots = allSlots.filter(s => s.date >= todayKeyStr);
+
+  const openSlots = futureSlots.filter(s => s.status === '' || s.status === 'Open');
+  const needsSubSlots = futureSlots.filter(s => s.status === 'Needs Sub');
+  const assignedSlots = futureSlots.filter(s => s.status === 'Assigned');
   const myTours = assignedSlots.filter(s => s.assigned.indexOf(currentDocent) !== -1);
   const offeredSlots = openSlots.filter(s => s.signups.indexOf(currentDocent) !== -1 && s.assigned.indexOf(currentDocent) === -1);
 
@@ -676,6 +753,7 @@ function render() {
   // Tabs
   html += '<div class="tabs">';
   html += '<div class="tab' + (activeTab === 'calendar' ? ' active' : '') + '" onclick="switchTab(\'calendar\')">Weekly View</div>';
+  html += '<div class="tab' + (activeTab === 'month' ? ' active' : '') + '" onclick="switchTab(\'month\')">Monthly Calendar</div>';
   html += '<div class="tab' + (activeTab === 'mytours' ? ' active' : '') + '" onclick="switchTab(\'mytours\')">Your Tours' +
            (myTours.length ? ' <span class="badge">' + myTours.length + '</span>' : '') + '</div>';
   html += '<div class="tab' + (activeTab === 'offered' ? ' active' : '') + '" onclick="switchTab(\'offered\')">Offered' +
@@ -688,6 +766,8 @@ function render() {
 
   if (activeTab === 'calendar') {
     html += renderWeek(openSlots, assignedSlots, needsSubSlots);
+  } else if (activeTab === 'month') {
+    html += renderMonth();
   } else if (activeTab === 'mytours') {
     html += renderMyTours(myTours);
   } else if (activeTab === 'offered') {
@@ -871,6 +951,105 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
   }
 
   return html;
+}
+
+function renderMonth() {
+  const year = currentMonth.getFullYear();
+  const month = currentMonth.getMonth();
+  const monthLabel = MONTH_NAMES[month] + ' ' + year;
+  const todayStr = dateKey(new Date());
+
+  // Group all slots (including earlier this month) by date
+  const slotsByDate = {};
+  allSlots.forEach(s => {
+    if (!slotsByDate[s.date]) slotsByDate[s.date] = [];
+    slotsByDate[s.date].push(s);
+  });
+
+  const firstDay = new Date(year, month, 1);
+  const lastDay = new Date(year, month + 1, 0);
+  const gridStart = addDays(firstDay, -firstDay.getDay());  // back to Sunday
+  const numWeeks = Math.ceil((firstDay.getDay() + lastDay.getDate()) / 7);
+
+  let html = '';
+
+  // Month navigation
+  html += '<div class="week-nav">';
+  html += '<button onclick="prevMonth()">&larr; Prev</button>';
+  html += '<span class="week-label">' + monthLabel + '</span>';
+  html += '<button onclick="nextMonth()">Next &rarr;</button>';
+  html += '</div>';
+
+  html += '<div class="cal-print-btn-wrap"><button class="btn-print" style="float:none;" onclick="printCalendar()">Print This Calendar</button></div>';
+
+  // Title that only shows on the printed page
+  html += '<div class="cal-print-title">CMOA Docent Tour Schedule &mdash; ' + monthLabel + '</div>';
+
+  html += '<div class="cal-grid">';
+  DAY_NAMES.forEach(d => { html += '<div class="cal-dow">' + d.slice(0, 3) + '</div>'; });
+
+  for (let i = 0; i < numWeeks * 7; i++) {
+    const day = addDays(gridStart, i);
+    const dk = dateKey(day);
+    const inMonth = day.getMonth() === month;
+    const isToday = dk === todayStr;
+
+    let cellClass = 'cal-cell';
+    if (!inMonth) cellClass += ' other-month';
+    if (isToday && inMonth) cellClass += ' cal-today';
+
+    html += '<div class="' + cellClass + '">';
+    html += '<div class="cal-daynum">' + day.getDate() + '</div>';
+
+    if (inMonth) {
+      const daySlots = (slotsByDate[dk] || []).slice()
+        .sort((a, b) => timeToMinutes(a.time) - timeToMinutes(b.time));
+
+      daySlots.forEach(slot => {
+        const isOpen = slot.status === '' || slot.status === 'Open';
+        const isSub = slot.status === 'Needs Sub';
+        const isCancelled = slot.status === 'Tour Cancelled';
+        let slotClass = 'assigned';
+        if (isOpen) slotClass = 'open';
+        else if (isSub) slotClass = 'needs-sub';
+        else if (isCancelled) slotClass = 'cancelled';
+
+        html += '<div class="cal-slot ' + slotClass + '">';
+        html += '<span class="cal-slot-time">' + escapeHtml(slot.timeDisplay || slot.time) + '</span> ';
+        html += escapeHtml(slot.tourType);
+
+        if (isCancelled) {
+          html += '<br><span class="cal-slot-names">Cancelled</span>';
+        } else if (isSub) {
+          html += '<br><span class="cal-slot-names">NEEDS A SUB</span>';
+        } else if (isOpen) {
+          html += '<br><span class="cal-slot-names">Open</span>';
+        } else if (slot.assigned) {
+          html += '<br><span class="cal-slot-names">' + escapeHtml(slot.assigned) + '</span>';
+        }
+
+        html += '</div>';
+      });
+    }
+
+    html += '</div>';
+  }
+
+  html += '</div>';
+  return html;
+}
+
+function prevMonth() { currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1); render(); }
+function nextMonth() { currentMonth = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1); render(); }
+
+function printCalendar() {
+  // Print the calendar landscape so a full month fits on one page
+  const style = document.createElement('style');
+  style.textContent = '@page { size: landscape; margin: 0.4in; }';
+  document.head.appendChild(style);
+  const cleanup = () => { style.remove(); window.removeEventListener('afterprint', cleanup); };
+  window.addEventListener('afterprint', cleanup);
+  window.print();
 }
 
 function renderMyTours(myTours) {

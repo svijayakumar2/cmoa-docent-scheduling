@@ -328,15 +328,19 @@ function buildSchedulePayload() {
     }
   }
 
-  // Build slot list
-  var today = getTodayET();
+  // Build slot list. Include slots back to the start of the current month
+  // so the monthly calendar can show the full month; the frontend hides
+  // past slots everywhere except the calendar view.
+  var monthStart = Utilities.parseDate(
+    Utilities.formatDate(new Date(), TIMEZONE, 'yyyy-MM') + '-01',
+    TIMEZONE, 'yyyy-MM-dd');
   var slots = [];
   for (var i = 1; i < schedData.length; i++) {
     var row = schedData[i];
     var slotId = (row[0] || '').toString();
     var date = new Date(row[1]);
     if (isNaN(date.getTime())) continue;
-    if (date < today) continue;
+    if (date < monthStart) continue;
 
     var status = (row[5] || '').toString();
     var assigned = (row[6] || '').toString();
