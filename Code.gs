@@ -34,6 +34,14 @@ function getTourDuration(tourType) {
   return TOUR_DURATION_MAP[(tourType || '').toLowerCase()] || DEFAULT_TOUR_DURATION;
 }
 
+// Per-slot duration: column O (index 14) of the Schedule sheet, in minutes.
+// Blank or invalid falls back to the tour-type map, then the 60-min default.
+function rowDuration(row) {
+  var d = parseInt(row[14], 10);
+  if (!isNaN(d) && d > 0) return d;
+  return getTourDuration((row[3] || '').toString());
+}
+
 // Use the spreadsheet's timezone (Eastern) so dates/times don't shift
 // when the script is run by someone in a different timezone
 var TIMEZONE = 'America/New_York';
@@ -83,10 +91,10 @@ function formatTime(val) {
   return val.toString();
 }
 
-function formatTimeRange(timeVal, tourType) {
+function formatTimeRange(timeVal, tourType, durationMinutes) {
   var startStr = formatTime(timeVal);
   if (!startStr) return startStr;
-  var duration = getTourDuration(tourType);
+  var duration = durationMinutes || getTourDuration(tourType);
   var match = startStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
   if (!match) return startStr;
   var startHour = parseInt(match[1]);
@@ -356,7 +364,7 @@ function buildSchedulePayload() {
       date: formatDateISO(date),
       dateDisplay: formatDateNice(date),
       time: formatTime(row[2]),
-      timeDisplay: formatTimeRange(row[2], tourType),
+      timeDisplay: formatTimeRange(row[2], tourType, rowDuration(row)),
       tourType: tourType,
       docentsNeeded: docentsNeeded,
       status: status,
@@ -543,7 +551,8 @@ function handleClaim(slotId, docentName) {
             docentData[i][1], docentName, slotId,
             new Date(schedData[slotRow][1]),
             schedData[slotRow][2],
-            schedData[slotRow][3].toString()
+            schedData[slotRow][3].toString(),
+            rowDuration(schedData[slotRow])
           );
         }
         docentSheet.getRange(i + 1, 3).setValue((docentData[i][2] || 0) + 1);
@@ -618,7 +627,8 @@ function handleClaimJSON(slotId, docentName) {
             docentData[i][1], docentName, slotId,
             new Date(schedData[slotRow][1]),
             schedData[slotRow][2],
-            schedData[slotRow][3].toString()
+            schedData[slotRow][3].toString(),
+            rowDuration(schedData[slotRow])
           );
         }
         docentSheet.getRange(i + 1, 3).setValue((docentData[i][2] || 0) + 1);
@@ -700,7 +710,7 @@ function handleDropOut(slotId, docentName) {
       KATHY_EMAIL,
       'Docent dropped out: ' + docentName + ' - ' + schedData[slotRow][3] + ' on ' + formatDateNice(new Date(schedData[slotRow][1])),
       docentName + ' has dropped out of the ' + schedData[slotRow][3] + ' tour on ' +
-      formatDateNice(new Date(schedData[slotRow][1])) + ' at ' + formatTimeRange(schedData[slotRow][2], schedData[slotRow][3].toString()) + '.\n\n' +
+      formatDateNice(new Date(schedData[slotRow][1])) + ' at ' + formatTimeRange(schedData[slotRow][2], schedData[slotRow][3].toString(), rowDuration(schedData[slotRow])) + '.\n\n' +
       'The system has set this slot to "Needs Sub" and is emailing available docents automatically.\n\n' +
       (remaining.length > 0 ? 'Still assigned: ' + remaining.join(', ') : 'No docents remaining on this slot.') +
       '\n\n-- Tour Scheduler'
@@ -816,7 +826,7 @@ function runAutoAssignment() {
     if ((schedData[i][5] || '').toString() !== 'Assigned') continue;
     var aDate = new Date(schedData[i][1]);
     var aDateKey = formatDateISO(aDate);
-    var aTimes = parseTimeRange(schedData[i][2], aDate, getTourDuration((schedData[i][3] || '').toString()));
+    var aTimes = parseTimeRange(schedData[i][2], aDate, rowDuration(schedData[i]));
     var aNames = (schedData[i][6] || '').toString().split(',').map(function(s) { return s.trim(); });
     for (var j = 0; j < aNames.length; j++) {
       var key = aNames[j] + '|' + aDateKey;
@@ -838,7 +848,7 @@ function runAutoAssignment() {
     if (status !== '' && status !== 'Open') continue;
     if (date > cutoff || date < today) continue;
 
-    var slotTimes = parseTimeRange(timeRaw, date, getTourDuration(tourType));
+    var slotTimes = parseTimeRange(timeRaw, date, rowDuration(row));
     var slotStart = slotTimes[0].getTime();
     var slotEnd = slotTimes[1].getTime();
     var slotDateKey = formatDateISO(date);
@@ -904,7 +914,7 @@ function runAutoAssignment() {
         // No eligible lead available at all. Do NOT assign the slot -- leave
         // it Open so the daily digest keeps advertising it to lead-eligible
         // docents -- and escalate to Kathy (once per slot).
-        escalateNoLead(slotId, tourType, date, timeRaw);
+        escalateNoLead(slotId, tourType, date, timeRaw, rowDuration(row));
         assigned = [];
       } else {
         assigned = leadAssigned.concat(participantAssigned);
@@ -931,7 +941,7 @@ function runAutoAssignment() {
         tally[name].count += 1;
         docentSheet.getRange(tally[name].row, 3).setValue(tally[name].count);
         if (isValidEmail(tally[name].email)) {
-          sendCalendarInvite(tally[name].email, name, slotId, date, timeRaw, tourType);
+          sendCalendarInvite(tally[name].email, name, slotId, date, timeRaw, tourType, rowDuration(row));
         }
 
         var key = name + '|' + slotDateKey;
@@ -948,7 +958,7 @@ function runAutoAssignment() {
             'You are the Tour Lead: ' + tourType + ' on ' + formatDateNice(date),
             'Hi ' + pName + ',\n\n' +
             'You signed up as a participant for the ' + tourType + ' on ' +
-            formatDateNice(date) + ' at ' + formatTimeRange(timeRaw, tourType) + '. ' +
+            formatDateNice(date) + ' at ' + formatTimeRange(timeRaw, tourType, rowDuration(row)) + '. ' +
             'No one volunteered to lead this tour, and since you are lead-certified ' +
             'you have been assigned as the Tour Lead.\n\n' +
             'If you cannot lead this tour, contact Kathy as soon as possible.\n\n' +
@@ -962,7 +972,7 @@ function runAutoAssignment() {
 
 // A school tour is inside the assignment window but no lead-eligible docent
 // has signed up (as lead or participant). Email Kathy once per slot.
-function escalateNoLead(slotId, tourType, date, timeRaw) {
+function escalateNoLead(slotId, tourType, date, timeRaw, durationMinutes) {
   var props = PropertiesService.getScriptProperties();
   var key = 'noLeadEscalated_' + slotId;
   if (props.getProperty(key)) return;
@@ -976,7 +986,7 @@ function escalateNoLead(slotId, tourType, date, timeRaw) {
     'Slot: ' + slotId + '\n' +
     'Tour: ' + tourType + '\n' +
     'Date: ' + formatDateNice(date) + '\n' +
-    'Time: ' + formatTimeRange(timeRaw, tourType) + '\n\n' +
+    'Time: ' + formatTimeRange(timeRaw, tourType, durationMinutes) + '\n\n' +
     'The tour will stay open until a lead signs up. To assign a lead yourself, ' +
     'type their name in the Assigned column (G) and the Tour Lead column (I), ' +
     'then set Status (F) to Assigned.\n\n' +
@@ -1009,10 +1019,10 @@ function onEditInstallable(e) {
 function handleTourCancelled(ss, schedSheet, row) {
   var docentSheet = ss.getSheetByName(SHEET_DOCENTS);
 
-  var schedData = schedSheet.getRange(row, 1, 1, 7).getValues()[0];
+  var schedData = schedSheet.getRange(row, 1, 1, 15).getValues()[0];
   var tourType = schedData[3].toString();
   var date = new Date(schedData[1]);
-  var time = formatTimeRange(schedData[2], tourType);
+  var time = formatTimeRange(schedData[2], tourType, rowDuration(schedData));
   var originallyAssigned = schedData[6].toString();
 
   var docentData = docentSheet.getDataRange().getValues();
@@ -1054,11 +1064,11 @@ function handleNeedsSub(ss, schedSheet, row) {
   var signupSheet = ss.getSheetByName(SHEET_SIGNUPS);
   var cancelSheet = ss.getSheetByName(SHEET_CANCELLATIONS);
 
-  var schedData = schedSheet.getRange(row, 1, 1, 7).getValues()[0];
+  var schedData = schedSheet.getRange(row, 1, 1, 15).getValues()[0];
   var slotId = schedData[0].toString();
   var tourType = schedData[3].toString();
   var date = new Date(schedData[1]);
-  var time = formatTimeRange(schedData[2], tourType);
+  var time = formatTimeRange(schedData[2], tourType, rowDuration(schedData));
   var originallyAssigned = schedData[6].toString();
 
   var docentData = docentSheet.getDataRange().getValues();
@@ -1229,7 +1239,7 @@ function sendDailyDigest() {
     var slotId = (row[0] || '').toString();
     var date = new Date(row[1]);
     var tourType = (row[3] || '').toString();
-    var time = formatTimeRange(row[2], tourType);
+    var time = formatTimeRange(row[2], tourType, rowDuration(row));
     var docentsNeeded = row[4] || 1;
     if (typeof docentsNeeded !== 'number') docentsNeeded = 1;
     var status = (row[5] || '').toString();
@@ -1365,7 +1375,7 @@ function checkExpiredClaims() {
           'Slot: ' + slotId + '\n' +
           'Tour: ' + schedData[j][3] + '\n' +
           'Date: ' + formatDateNice(new Date(schedData[j][1])) + '\n' +
-          'Time: ' + formatTimeRange(schedData[j][2], (schedData[j][3] || '').toString()) + '\n\n' +
+          'Time: ' + formatTimeRange(schedData[j][2], (schedData[j][3] || '').toString(), rowDuration(schedData[j])) + '\n\n' +
           'Please assign manually.'
         );
         cancelSheet.getRange(i + 1, 4).setValue('Escalated');
@@ -1378,9 +1388,9 @@ function checkExpiredClaims() {
 // =====================
 // CALENDAR INVITE
 // =====================
-function sendCalendarInvite(email, name, slotId, date, timeStr, tourType) {
+function sendCalendarInvite(email, name, slotId, date, timeStr, tourType, durationMinutes) {
   if (!isValidEmail(email)) return;
-  var times = parseTimeRange(timeStr, date, getTourDuration(tourType));
+  var times = parseTimeRange(timeStr, date, durationMinutes || getTourDuration(tourType));
   CalendarApp.getDefaultCalendar().createEvent(
     'Tour: ' + tourType,
     times[0],

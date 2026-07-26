@@ -41,6 +41,7 @@ Here is what is safe to change and what is not.
 | What you want to do | How |
 |---|---|
 | Add a new tour | Add a new row and fill in columns **A–E** (Slot ID, Date, Time, Tour Type, # Docents Needed). Column **H** (Details) is optional. |
+| Make a tour shorter or longer than 1 hour | Put the length in minutes in column **O** (for example: **30**). Leave it blank for the normal 1 hour. This controls the times shown on the website and in calendar invites. |
 | Add a **Mindful Museum** tour | Same as above, **plus** fill in column **M** (how many Welcome Desk docents) and column **N** (how many tour docents) — just numbers. |
 | Add a **School Tour** | Same as a normal tour — just set the total number in column **E**. Docents choose "Lead" or "Participant" when they sign up. If no qualified docent volunteers to lead, you'll get an email asking you to pick a lead yourself. |
 | Cancel a tour | In column **F** (Status), type exactly: **Tour Cancelled** |
