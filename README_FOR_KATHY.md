@@ -41,6 +41,8 @@ Here is what is safe to change and what is not.
 | What you want to do | How |
 |---|---|
 | Add a new tour | Add a new row and fill in columns **A–E** (Slot ID, Date, Time, Tour Type, # Docents Needed). Column **H** (Details) is optional. |
+| Add a **Mindful Museum** tour | Same as above, **plus** fill in column **M** (how many Welcome Desk docents) and column **N** (how many tour docents) — just numbers. |
+| Add a **School Tour** | Same as a normal tour — just set the total number in column **E**. The system automatically makes one docent the Lead and the rest Participants. |
 | Cancel a tour | In column **F** (Status), type exactly: **Tour Cancelled** |
 | A docent told you they can't make it | In column **F** (Status), type exactly: **Needs Sub** |
 | The system emails you "please assign manually" | Type the docent's name in column **G** (Assigned) and set column **F** to **Assigned** |
@@ -54,6 +56,9 @@ you mean it.
 - Do **not** delete rows — to cancel a tour, use "Tour Cancelled" instead.
 - Do **not** type in column **G** (Assigned) except when the system asks
   you to assign manually. The system fills this in on its own.
+- Do **not** type in columns **I, J, K, or L** — that's where the system
+  writes *which* docent got each role (School Tour lead and participants,
+  Mindful Museum desk and tour lead). It fills these in on its own.
 - Do **not** change column **A** (Slot ID) on existing rows.
 
 ### Tab 2: "Docents" (the list of docents)
