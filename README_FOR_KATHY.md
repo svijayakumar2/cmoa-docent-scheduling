@@ -46,6 +46,7 @@ Here is what is safe to change and what is not.
 | Cancel a tour | In column **F** (Status), type exactly: **Tour Cancelled** |
 | A docent told you they can't make it | In column **F** (Status), type exactly: **Needs Sub** |
 | The system emails you "please assign manually" | Type the docent's name in column **G** (Assigned) and set column **F** to **Assigned** |
+| The system emails you "School tour needs a lead" | Pick a qualified docent yourself: type their name in **both** column **G** (Assigned) and column **I** (Tour Lead), and set column **F** to **Assigned** |
 
 **Important:** the moment you type "Tour Cancelled" or "Needs Sub" in
 column F, the system **immediately emails docents**. Only type it when
@@ -59,6 +60,15 @@ you mean it.
 - Do **not** type in columns **I, J, K, or L** — that's where the system
   writes *which* docent got each role (School Tour lead and participants,
   Mindful Museum desk and tour lead). It fills these in on its own.
+  The only exception: column **I**, when the system emails you that a
+  school tour needs a lead (see the table above).
+
+**How school tour leads work:** docents volunteer to lead themselves —
+the system never forces the role on anyone who didn't offer. If no
+qualified docent volunteers to lead, the system promotes a qualified
+docent who signed up as a participant (and tells them). Only if there's
+truly no qualified person does it email you — so a "needs a lead" email
+means it genuinely needs your judgment.
 - Do **not** change column **A** (Slot ID) on existing rows.
 
 ### Tab 2: "Docents" (the list of docents)
@@ -93,13 +103,25 @@ Also the system's private record-keeping.
 
 Every morning the system:
 
-- **6 AM** — assigns docents to tours coming up in the next 14 days
+- **6 AM** — assigns docents to tours coming up in the next **20 days**
   (never more than one tour per docent per day)
 - **7 AM** — emails each docent their reminders and any tours that
   still need help
-- **8 AM** — checks if any "Needs Sub" tour went unclaimed too long,
-  and emails **you** if a human needs to step in
+- **8 AM** — checks if any "Needs Sub" tour has gone unclaimed for
+  **5 days**, and emails **you** if a human needs to step in
 - **2 AM** — saves a backup copy of the whole spreadsheet
+
+**About the 20-day planning window:** tours further than 20 days away
+just collect volunteers — nobody is assigned yet. So it's completely
+normal for a tour six weeks out to show no names. Names appear once
+the tour is within 20 days.
+
+**About the 5-day claim window:** when a docent drops out, the system
+emails possible substitutes — first to claim it, gets it. If nobody
+claims within 5 days, the system stops waiting and emails you.
+
+(Both numbers are settings in the code, not in the spreadsheet —
+if you'd ever like them changed, ask Saranya.)
 
 You will get an email whenever the system needs your help — for example,
 if nobody can cover a tour. If you don't get an email, everything is fine.

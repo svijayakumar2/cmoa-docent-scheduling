@@ -1,7 +1,7 @@
 // === CONFIGURATION ===
 const KATHY_EMAIL = 'saranyav196@gmail.com';
 const CLAIM_WINDOW_DAYS = 5;
-const AUTO_ASSIGN_DAYS_OUT = 14;
+const AUTO_ASSIGN_DAYS_OUT = 20;
 
 const SHEET_SCHEDULE   = 'Schedule';
 const SHEET_DOCENTS    = 'Docents';
