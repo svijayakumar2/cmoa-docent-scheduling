@@ -501,7 +501,7 @@
 </div>
 
 <script>
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwxCwCI7siYv_cTSFZICi7nTz6pciRRWCFJtty9ZQ3Yca4ZhJHwZNfNm4ZQ7ByRBkvJIw/exec';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw2VTYME2bSQe779Htu2pY5mTXjN2QXnmv3t0-_GrZkUsbwVAaSYIyqMr6xJuV6pPNWhg/exec';
 
 let currentDocent = localStorage.getItem('cmoa_docent_name') || '';
 let allSlots = [];
@@ -591,8 +591,11 @@ function cleanTime(raw) {
 }
 
 function isCertifiedFor(docentName, tourType) {
+  // A blank/empty cert list means the docent holds NO certifications. They are
+  // in training and cannot take ANY tour, including untagged ones.
   const certs = docentCertMap[docentName];
-  if (!certs) return true;
+  if (!certs || certs.length === 0) return false;
+  // Otherwise they must hold the specific tag this tour requires.
   const requiredTag = tourTagMap[tourType.toLowerCase()];
   if (!requiredTag) return true;
   return certs.indexOf(requiredTag) !== -1;
