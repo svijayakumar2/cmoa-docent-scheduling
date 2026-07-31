@@ -2,6 +2,11 @@
 const KATHY_EMAIL = 'saranyav196@gmail.com';
 const CLAIM_WINDOW_DAYS = 5;
 const AUTO_ASSIGN_DAYS_OUT = 20;
+// Slots within this many days of today are "emergencies": when a docent signs
+// up we assign them immediately instead of waiting for the daily batch job.
+// Within this window a docent may also take a 2nd tour on a day they already
+// have one, but only if they are the sole signup and the times don't overlap.
+const EMERGENCY_DAYS = 10;
 
 const SHEET_SCHEDULE   = 'Schedule';
 const SHEET_DOCENTS    = 'Docents';
@@ -72,12 +77,14 @@ function dayName(dayNum) {
 }
 
 function isCertifiedFor(docentInfo, tourType) {
-  if (!docentInfo.certifiedTours) return true;
   return isCertifiedForRaw(docentInfo.certifiedTours, tourType);
 }
 
 function isCertifiedForRaw(certList, tourType) {
-  if (!certList) return true;
+  // A blank/empty cert list means the docent holds NO certifications. They are
+  // in training and cannot take ANY tour, including untagged ones.
+  if (!certList || certList.length === 0) return false;
+  // Otherwise they must hold the specific tag this tour requires.
   var requiredTag = TOUR_TAG_MAP[tourType.toLowerCase()];
   if (!requiredTag) return true;
   return certList.indexOf(requiredTag) !== -1;
@@ -454,10 +461,147 @@ function handleSignup(docentName, slotIds, roles) {
       signupSheet.deleteRow(rowsToDelete[j]);
     }
 
+    // Emergency window: if any of these slots are within EMERGENCY_DAYS, assign
+    // this docent immediately instead of waiting for the daily batch job.
+    tryImmediateAssign(ss, docentName, slotIds, roles);
+
     return ContentService.createTextOutput(JSON.stringify({ ok: true }))
       .setMimeType(ContentService.MimeType.JSON);
   } finally {
     lock.releaseLock();
+  }
+}
+
+// =====================
+// IMMEDIATE (EMERGENCY) ASSIGNMENT
+// Called from handleSignup for slots within EMERGENCY_DAYS. Mirrors the
+// eligibility/role logic of runAutoAssignment but scoped to one docent and the
+// slots they just signed up for, so near-term needs are filled at signup time.
+// =====================
+function tryImmediateAssign(ss, docentName, slotIds, roles) {
+  roles = roles || {};
+  var schedSheet = ss.getSheetByName(SHEET_SCHEDULE);
+  var docentSheet = ss.getSheetByName(SHEET_DOCENTS);
+  var signupSheet = ss.getSheetByName(SHEET_SIGNUPS);
+
+  var schedData = schedSheet.getDataRange().getValues();
+  var docentData = docentSheet.getDataRange().getValues();
+  var signupData = signupSheet.getDataRange().getValues();
+
+  var today = getTodayET();
+  var emergencyCutoff = new Date(today.getTime() + EMERGENCY_DAYS * 86400000);
+
+  // Find this docent's row / cert / lead eligibility / tour count.
+  var docentRow = -1, docentEmail = '', docentCount = 0;
+  var certList = null, leadEligible = false;
+  for (var i = 1; i < docentData.length; i++) {
+    if ((docentData[i][0] || '').toString() === docentName) {
+      docentRow = i + 1;
+      docentEmail = docentData[i][1];
+      docentCount = docentData[i][2] || 0;
+      var certRaw = (docentData[i][5] || '').toString().trim();
+      certList = certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null;
+      leadEligible = (docentData[i][8] || '').toString().toLowerCase() === 'yes';
+      break;
+    }
+  }
+  if (docentRow === -1) return; // name mismatch; nothing we can do here
+
+  // Count signups per slot (to know if this docent is the only one) and this
+  // docent's already-assigned times per day (for the one-per-day rule + overlap).
+  var signupCount = {};
+  for (var i = 1; i < signupData.length; i++) {
+    var s = (signupData[i][2] || '').toString();
+    if (!s) continue;
+    signupCount[s] = (signupCount[s] || 0) + 1;
+  }
+
+  var assignedTimesByDay = {};
+  for (var i = 1; i < schedData.length; i++) {
+    if ((schedData[i][5] || '').toString() !== 'Assigned') continue;
+    var aNames = (schedData[i][6] || '').toString().split(',').map(function(s) { return s.trim(); });
+    if (aNames.indexOf(docentName) === -1) continue;
+    var aDate = new Date(schedData[i][1]);
+    var aKey = formatDateISO(aDate);
+    var aTimes = parseTimeRange(schedData[i][2], aDate, rowDuration(schedData[i]));
+    if (!assignedTimesByDay[aKey]) assignedTimesByDay[aKey] = [];
+    assignedTimesByDay[aKey].push([aTimes[0].getTime(), aTimes[1].getTime()]);
+  }
+
+  var slotSet = {};
+  for (var j = 0; j < slotIds.length; j++) slotSet[slotIds[j]] = true;
+
+  for (var i = 1; i < schedData.length; i++) {
+    var row = schedData[i];
+    var slotId = (row[0] || '').toString();
+    if (!slotSet[slotId]) continue;
+
+    var date = new Date(row[1]);
+    if (isNaN(date.getTime())) continue;
+    if (date < today || date > emergencyCutoff) continue; // outside emergency window
+
+    var status = (row[5] || '').toString();
+    if (status !== '' && status !== 'Open') continue; // already handled
+
+    var tourType = (row[3] || '').toString();
+    if (!isCertifiedForRaw(certList, tourType)) continue;
+
+    // Mindful Museum slots use desk/tour role buckets with separate headcounts.
+    // Defer those to the daily batch job rather than half-filling role columns.
+    var neededDesk = row[12] || 0;
+    var neededMindfulTour = row[13] || 0;
+    if (neededDesk > 0 || neededMindfulTour > 0) continue;
+
+    var timeRaw = row[2];
+    var duration = rowDuration(row);
+    var slotTimes = parseTimeRange(timeRaw, date, duration);
+    var slotStart = slotTimes[0].getTime();
+    var slotEnd = slotTimes[1].getTime();
+    var dayKey = formatDateISO(date);
+
+    var isSchoolTour = tourType.toLowerCase() === 'school tour';
+    var role = (roles[slotId] || '').toString();
+
+    // School tours need a lead. Only assign as lead if lead-eligible; don't
+    // silently make a non-lead the lead. (Batch job handles fuller escalation.)
+    var assignAsLead = false;
+    if (isSchoolTour) {
+      if (role === 'lead' || role === '') {
+        if (!leadEligible) continue; // let the batch job / Kathy handle it
+        assignAsLead = true;
+      }
+    }
+
+    // One-per-day rule, with the emergency exception: a 2nd tour on a day the
+    // docent already has one is allowed ONLY if they are the sole signup for
+    // this slot AND the times don't overlap an existing assignment.
+    var existing = assignedTimesByDay[dayKey] || [];
+    if (existing.length > 0) {
+      var soleSignup = (signupCount[slotId] || 0) <= 1;
+      if (!soleSignup) continue;
+      var overlaps = false;
+      for (var k = 0; k < existing.length; k++) {
+        if (slotStart < existing[k][1] && slotEnd > existing[k][0]) { overlaps = true; break; }
+      }
+      if (overlaps) continue;
+    }
+
+    // Assign.
+    schedSheet.getRange(i + 1, 6).setValue('Assigned');
+    schedSheet.getRange(i + 1, 7).setValue(docentName);
+    if (isSchoolTour && assignAsLead) {
+      schedSheet.getRange(i + 1, 9).setValue(docentName);
+    }
+
+    docentCount += 1;
+    docentSheet.getRange(docentRow, 3).setValue(docentCount);
+
+    if (isValidEmail(docentEmail)) {
+      sendCalendarInvite(docentEmail, docentName, slotId, date, timeRaw, tourType, duration);
+    }
+
+    if (!assignedTimesByDay[dayKey]) assignedTimesByDay[dayKey] = [];
+    assignedTimesByDay[dayKey].push([slotStart, slotEnd]);
   }
 }
 
@@ -865,7 +1009,9 @@ function runAutoAssignment() {
     function filterEligible(names) {
       return names.filter(function(n) {
         if (!tally[n]) return false;
-        if (tally[n].unavailable) return false;
+        // Note: "Unavailable Until" is deliberately NOT checked here. Signing up
+        // for a slot is an explicit "I am available" signal that overrides a
+        // stale unavailability date. Unavailability only governs outreach.
         if (!isCertifiedFor(tally[n], tourType)) return false;
         var key = n + '|' + slotDateKey;
         var existing = assignedTimes[key] || [];
@@ -1104,7 +1250,9 @@ function handleNeedsSub(ss, schedSheet, row) {
   var assignedList = originallyAssigned.split(',').map(function(s) { return s.trim(); });
   var backups = slotSignups.filter(function(n) {
     if (assignedList.indexOf(n) !== -1) return false;
-    if (unavailMap[n]) return false;
+    // "Unavailable Until" is NOT checked for backups: these docents signed up
+    // as available for this exact slot, which overrides a stale unavailability
+    // date. It still applies to Tier 2 cold outreach below.
     if (certMap[n] && !isCertifiedForRaw(certMap[n], tourType)) return false;
     return true;
   });
