@@ -1,12 +1,12 @@
 // === CONFIGURATION ===
 const KATHY_EMAIL = 'saranyav196@gmail.com';
-const CLAIM_WINDOW_DAYS = 5;
+const CLAIM_WINDOW_DAYS = 10;
 const AUTO_ASSIGN_DAYS_OUT = 20;
 // Slots within this many days of today are "emergencies": when a docent signs
 // up we assign them immediately instead of waiting for the daily batch job.
 // Within this window a docent may also take a 2nd tour on a day they already
 // have one, but only if they are the sole signup and the times don't overlap.
-const EMERGENCY_DAYS = 10;
+const EMERGENCY_DAYS = 5;
 
 const SHEET_SCHEDULE   = 'Schedule';
 const SHEET_DOCENTS    = 'Docents';
