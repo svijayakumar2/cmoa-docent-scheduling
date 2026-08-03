@@ -17,8 +17,8 @@ const BACKUP_KEEP_DAYS    = 30;
 const SITE_URL = 'https://svijayakumar2.github.io/cmoa-docent-scheduling/';
 
 // Certification tags: PC = Permanent Collection, CI = Carnegie International, SCH = School Tour
-// Mindful Museum has NO certification requirement (anyone can sign up)
 // CI Activation uses the same CI certification
+// Mindful Museum and Group Tour require PC certification
 var TOUR_TAG_MAP = {
   'permanent collection': 'pc',
   'permanent collection evening': 'pc',
@@ -26,7 +26,9 @@ var TOUR_TAG_MAP = {
   'carnegie international': 'ci',
   'carnegie international evening': 'ci',
   'ci activation tour': 'ci',
-  'school tour': 'sch'
+  'school tour': 'sch',
+  'mindful museum': 'pc',
+  'group tour': 'pc'
 };
 
 // Tour duration in minutes by type (default 60 min)
