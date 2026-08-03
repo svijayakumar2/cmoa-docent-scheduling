@@ -1150,6 +1150,7 @@ function renderPreferences() {
   var preferred = (info.preferredDays || '').toString().toLowerCase().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
   var avoid = (info.avoidDays || '').toString().toLowerCase().split(',').map(function(s) { return s.trim(); }).filter(Boolean);
   var lastMinute = info.lastMinute || false;
+  var calendarInvite = info.calendarInvite || false;
   var unavailUntil = info.unavailableUntil || '';
 
   var days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -1186,6 +1187,15 @@ function renderPreferences() {
   html += '<label for="pref-lastminute">I\'m available for last-minute tour requests</label>';
   html += '</div>';
   html += '<p style="margin-top:0.5rem;">If checked, you may be contacted when a tour suddenly needs a substitute, even on days you haven\'t listed as preferred.</p>';
+  html += '</div>';
+
+  html += '<div class="pref-section">';
+  html += '<h3>Calendar Invites</h3>';
+  html += '<div class="pref-toggle">';
+  html += '<input type="checkbox" id="pref-calendar"' + (calendarInvite ? ' checked' : '') + '>';
+  html += '<label for="pref-calendar">Send me a calendar invite when I\'m assigned a tour</label>';
+  html += '</div>';
+  html += '<p style="margin-top:0.5rem;">By default we send a plain confirmation email. Check this if you use an electronic calendar and would like a calendar invite instead.</p>';
   html += '</div>';
 
   html += '<div class="pref-section">';
@@ -1232,6 +1242,7 @@ async function savePreferences() {
   });
 
   var lastMinute = document.getElementById('pref-lastminute').checked;
+  var calendarInvite = document.getElementById('pref-calendar').checked;
   var unavailUntil = document.getElementById('pref-unavail').value || '';
 
   try {
@@ -1245,6 +1256,7 @@ async function savePreferences() {
           preferredDays: preferred.join(', '),
           avoidDays: avoid.join(', '),
           lastMinute: lastMinute,
+          calendarInvite: calendarInvite,
           unavailableUntil: unavailUntil
         }
       })
@@ -1255,6 +1267,7 @@ async function savePreferences() {
         docentInfoMap[currentDocent].preferredDays = preferred.join(', ');
         docentInfoMap[currentDocent].avoidDays = avoid.join(', ');
         docentInfoMap[currentDocent].lastMinute = lastMinute;
+        docentInfoMap[currentDocent].calendarInvite = calendarInvite;
         docentInfoMap[currentDocent].unavailableUntil = unavailUntil;
       }
       showMessage('Preferences saved.', 'success');

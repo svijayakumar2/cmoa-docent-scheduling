@@ -319,6 +319,7 @@ function buildSchedulePayload() {
         preferredDays: (docentData[i][6] || '').toString(),
         avoidDays: (docentData[i][7] || '').toString(),
         lastMinute: (docentData[i][9] || '').toString().toLowerCase() === 'yes',
+        calendarInvite: (docentData[i][10] || '').toString().toLowerCase() === 'yes',
         unavailableUntil: unavailStr
       });
     }
@@ -495,7 +496,7 @@ function tryImmediateAssign(ss, docentName, slotIds, roles) {
 
   // Find this docent's row / cert / lead eligibility / tour count.
   var docentRow = -1, docentEmail = '', docentCount = 0;
-  var certList = null, leadEligible = false;
+  var certList = null, leadEligible = false, wantsCalendar = false;
   for (var i = 1; i < docentData.length; i++) {
     if ((docentData[i][0] || '').toString() === docentName) {
       docentRow = i + 1;
@@ -504,6 +505,7 @@ function tryImmediateAssign(ss, docentName, slotIds, roles) {
       var certRaw = (docentData[i][5] || '').toString().trim();
       certList = certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null;
       leadEligible = (docentData[i][8] || '').toString().toLowerCase() === 'yes';
+      wantsCalendar = (docentData[i][10] || '').toString().toLowerCase() === 'yes';
       break;
     }
   }
@@ -599,7 +601,7 @@ function tryImmediateAssign(ss, docentName, slotIds, roles) {
     docentSheet.getRange(docentRow, 3).setValue(docentCount);
 
     if (isValidEmail(docentEmail)) {
-      sendCalendarInvite(docentEmail, docentName, slotId, date, timeRaw, tourType, duration);
+      notifyAssignment(docentEmail, docentName, slotId, date, timeRaw, tourType, duration, wantsCalendar);
     }
 
     if (!assignedTimesByDay[dayKey]) assignedTimesByDay[dayKey] = [];
@@ -634,6 +636,8 @@ function handleSavePreferences(docentName, prefs) {
         docentSheet.getRange(i + 1, 8).setValue(prefs.avoidDays || '');
         // Column J (10): Last Minute
         docentSheet.getRange(i + 1, 10).setValue(prefs.lastMinute ? 'Yes' : '');
+        // Column K (11): Calendar Invite opt-in
+        docentSheet.getRange(i + 1, 11).setValue(prefs.calendarInvite ? 'Yes' : '');
         break;
       }
     }
@@ -693,12 +697,13 @@ function handleClaim(slotId, docentName) {
     for (var i = 1; i < docentData.length; i++) {
       if (docentData[i][0] === docentName) {
         if (isValidEmail(docentData[i][1])) {
-          sendCalendarInvite(
+          notifyAssignment(
             docentData[i][1], docentName, slotId,
             new Date(schedData[slotRow][1]),
             schedData[slotRow][2],
             schedData[slotRow][3].toString(),
-            rowDuration(schedData[slotRow])
+            rowDuration(schedData[slotRow]),
+            (docentData[i][10] || '').toString().toLowerCase() === 'yes'
           );
         }
         docentSheet.getRange(i + 1, 3).setValue((docentData[i][2] || 0) + 1);
@@ -769,12 +774,13 @@ function handleClaimJSON(slotId, docentName) {
     for (var i = 1; i < docentData.length; i++) {
       if (docentData[i][0] === docentName) {
         if (isValidEmail(docentData[i][1])) {
-          sendCalendarInvite(
+          notifyAssignment(
             docentData[i][1], docentName, slotId,
             new Date(schedData[slotRow][1]),
             schedData[slotRow][2],
             schedData[slotRow][3].toString(),
-            rowDuration(schedData[slotRow])
+            rowDuration(schedData[slotRow]),
+            (docentData[i][10] || '').toString().toLowerCase() === 'yes'
           );
         }
         docentSheet.getRange(i + 1, 3).setValue((docentData[i][2] || 0) + 1);
@@ -941,7 +947,8 @@ function runAutoAssignment() {
       row: i + 1,
       unavailable: unavailUntil && unavailUntil >= today,
       certifiedTours: certRaw ? certRaw.split(',').map(function(s) { return s.trim().toLowerCase(); }) : null,
-      leadEligible: (docentData[i][8] || '').toString().toLowerCase() === 'yes'
+      leadEligible: (docentData[i][8] || '').toString().toLowerCase() === 'yes',
+      calendarInvite: (docentData[i][10] || '').toString().toLowerCase() === 'yes'
     };
   }
 
@@ -1089,7 +1096,7 @@ function runAutoAssignment() {
         tally[name].count += 1;
         docentSheet.getRange(tally[name].row, 3).setValue(tally[name].count);
         if (isValidEmail(tally[name].email)) {
-          sendCalendarInvite(tally[name].email, name, slotId, date, timeRaw, tourType, rowDuration(row));
+          notifyAssignment(tally[name].email, name, slotId, date, timeRaw, tourType, rowDuration(row), tally[name].calendarInvite);
         }
 
         var key = name + '|' + slotDateKey;
@@ -1538,6 +1545,33 @@ function checkExpiredClaims() {
 // =====================
 // CALENDAR INVITE
 // =====================
+// Notify an assigned docent. By default sends a plain confirmation email;
+// only docents who opted in (Calendar Invite preference) get a calendar invite.
+function notifyAssignment(email, name, slotId, date, timeStr, tourType, durationMinutes, wantsCalendar) {
+  if (!isValidEmail(email)) return;
+  if (wantsCalendar) {
+    sendCalendarInvite(email, name, slotId, date, timeStr, tourType, durationMinutes);
+  } else {
+    sendConfirmationEmail(email, name, date, timeStr, tourType, durationMinutes);
+  }
+}
+
+// Plain-text assignment confirmation (default for docents who have NOT opted
+// into calendar invites).
+function sendConfirmationEmail(email, name, date, timeStr, tourType, durationMinutes) {
+  if (!isValidEmail(email)) return;
+  var timeRange = formatTimeRange(timeStr, tourType, durationMinutes || getTourDuration(tourType));
+  MailApp.sendEmail(
+    email,
+    'Tour assignment: ' + tourType + ' on ' + formatDateNice(date),
+    'Hi ' + name + ',\n\n' +
+    'You are assigned to the ' + tourType + ' tour on ' +
+    formatDateNice(date) + ' at ' + timeRange + '.\n\n' +
+    'If you cannot make this tour, contact Kathy as soon as possible.\n\n' +
+    '-- Tour Scheduler'
+  );
+}
+
 function sendCalendarInvite(email, name, slotId, date, timeStr, tourType, durationMinutes) {
   if (!isValidEmail(email)) return;
   var times = parseTimeRange(timeStr, date, durationMinutes || getTourDuration(tourType));
