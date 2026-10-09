@@ -331,6 +331,7 @@
     .message { padding: 0.7rem 1rem; border-radius: 6px; margin-bottom: 0.75rem; font-size: 0.9rem; }
     .message-success { background: #e8f5e8; color: #2a5a2a; border: 1px solid #a8c8a8; }
     .message-error { background: #fde8e8; color: #8a2a2a; border: 1px solid #d4a8a8; }
+    .message-warning { background: #fff5dd; color: #684b0b; border: 1px solid #dbc68c; }
     .message-info { background: #e8eef5; color: #2a3a5a; border: 1px solid #a8b8d4; }
 
     .loading { text-align: center; padding: 3rem; color: #888; font-style: italic; }
@@ -551,6 +552,7 @@ let adminRuleSearch = '';
 let adminStatus = null;
 let activeTab = 'calendar';
 let tourTypeFilter = '';
+let scheduleLoaded = false;
 
 function getMonday(d) {
   const dt = new Date(d);
@@ -647,10 +649,13 @@ function isDonorSlot(slot) {
 
 document.addEventListener('DOMContentLoaded', loadData);
 
-async function loadData() {
+async function loadData(options = {}) {
   try {
-    const resp = await fetch(WEB_APP_URL);
+    const resp = await fetch(WEB_APP_URL + '?refresh=' + Date.now());
     const data = await resp.json();
+    if (resp.ok === false || !Array.isArray(data.docents) || !Array.isArray(data.slots)) {
+      throw new Error('The server did not return a schedule.');
+    }
     legacyTourTagMap = data.tourTagMap || null;
     allDocents = data.docents || [];
     // Deduplicate by slotId (in case sheet has duplicate rows)
@@ -683,12 +688,76 @@ async function loadData() {
       localStorage.removeItem('cmoa_docent_name');
     }
 
+    scheduleLoaded = true;
     updateHeaderControls();
     render();
+    return true;
   } catch (err) {
-    document.getElementById('app').innerHTML =
-      '<div class="message message-error">Could not load schedule. Please try refreshing.</div>';
+    if (!scheduleLoaded) {
+      document.getElementById('app').innerHTML =
+        '<div class="message message-error">Could not load schedule. Please try refreshing.</div>';
+    } else if (!options.quiet) {
+      showMessage('Could not refresh the schedule. Your previous view is still shown.', 'error');
+    }
+    return false;
   }
+}
+
+function slotHasDocent(slot, name) {
+  return (slot.assigned || '').split(',').some(n => n.trim() === name);
+}
+
+async function postAction(payload) {
+  const response = await fetch(WEB_APP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain' },
+    body: JSON.stringify(payload)
+  });
+  const result = await response.json();
+  if (response.ok === false || !result || (!result.ok && !result.error)) {
+    throw new Error('The server did not confirm the change.');
+  }
+  return result;
+}
+
+// A server error can happen after the sheet has been updated (for example,
+// while sending email). Refresh even then and check the saved state. Display
+// the result after rendering so refresh cannot erase the confirmation/error.
+async function submitDocentAction(payload, button, pendingText, successText, verifySaved) {
+  const previousText = button.textContent;
+  button.disabled = true;
+  button.textContent = pendingText;
+  let result = null;
+  try { result = await postAction(payload); } catch (err) { /* Verify against the sheet below. */ }
+  const refreshed = await loadData({ quiet: true });
+  const verified = refreshed && verifySaved();
+  let message, type;
+  if (result && result.ok) {
+    message = result.warning || successText;
+    type = result.warning ? 'warning' : 'success';
+    if (!refreshed) {
+      message += ' The change is saved, but this view could not refresh. Refresh the page before making another change.';
+      type = 'warning';
+    } else if (!verified) {
+      message = 'The server accepted the change, but the updated schedule does not show it yet. Refresh before trying again.';
+      type = 'warning';
+    }
+  } else if (verified) {
+    message = successText;
+    type = 'success';
+    if (!result) {
+      message += ' The saved change was verified; any follow-up emails could not be confirmed.';
+      type = 'warning';
+    }
+  } else {
+    message = result && result.error ? result.error :
+      'Could not confirm the change. Refresh the page to check the schedule before trying again.';
+    type = 'error';
+  }
+  button.disabled = false;
+  button.textContent = previousText;
+  showMessage(message, type);
+  return !!((result && result.ok) || verified);
 }
 
 function updateHeaderControls() {
@@ -781,8 +850,8 @@ function render() {
   const openSlots = futureSlots.filter(s => (s.status === '' || s.status === 'Open') && !isDonorSlot(s));
   const needsSubSlots = futureSlots.filter(s => s.status === 'Needs Sub' && !isDonorSlot(s));
   const assignedSlots = futureSlots.filter(s => s.status === 'Assigned');
-  const myTours = assignedSlots.filter(s => s.assigned.indexOf(currentDocent) !== -1);
-  const offeredSlots = openSlots.filter(s => s.signups.indexOf(currentDocent) !== -1 && s.assigned.indexOf(currentDocent) === -1);
+  const myTours = futureSlots.filter(s => ['Assigned', 'Needs Sub', 'Escalated'].includes(s.status) && slotHasDocent(s, currentDocent));
+  const offeredSlots = openSlots.filter(s => s.signups.indexOf(currentDocent) !== -1 && !slotHasDocent(s, currentDocent));
 
   selectedSlots = new Set();
   selectedRoles = {};
@@ -804,7 +873,7 @@ function render() {
     }
   });
 
-  let html = '<div id="message-area"></div>';
+  let html = '<div id="message-area" role="status" aria-live="polite"></div>';
 
   // Tabs
   html += '<div class="tabs">';
@@ -906,7 +975,7 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
       daySlots.forEach(slot => {
         const isOpen = slot.status === '' || slot.status === 'Open';
         const isAssigned = slot.status === 'Assigned';
-        const isYours = isAssigned && slot.assigned.indexOf(currentDocent) !== -1;
+        const isYours = isAssigned && slotHasDocent(slot, currentDocent);
         const isSub = slot.status === 'Needs Sub';
         const checked = selectedSlots.has(slot.slotId);
         const certified = isCertifiedFor(currentDocent, slot);
@@ -1308,40 +1377,19 @@ async function savePreferences() {
   var calendarInvite = document.getElementById('pref-calendar').checked;
   var unavailUntil = document.getElementById('pref-unavail').value || '';
 
-  try {
-    var resp = await fetch(WEB_APP_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({
-        action: 'savePreferences',
-        docent: currentDocent,
-        preferences: {
-          preferredDays: preferred.join(', '),
-          avoidDays: avoid.join(', '),
-          lastMinute: lastMinute,
-          calendarInvite: calendarInvite,
-          unavailableUntil: unavailUntil
-        }
-      })
-    });
-    var result = await resp.json();
-    if (result.ok) {
-      if (docentInfoMap[currentDocent]) {
-        docentInfoMap[currentDocent].preferredDays = preferred.join(', ');
-        docentInfoMap[currentDocent].avoidDays = avoid.join(', ');
-        docentInfoMap[currentDocent].lastMinute = lastMinute;
-        docentInfoMap[currentDocent].calendarInvite = calendarInvite;
-        docentInfoMap[currentDocent].unavailableUntil = unavailUntil;
-      }
-      showMessage('Preferences saved.', 'success');
-    } else {
-      showMessage(result.error || 'Could not save preferences.', 'error');
-    }
-  } catch (err) {
-    showMessage('Could not save. Check your internet connection.', 'error');
-  }
+  const name = currentDocent;
+  const preferences = {
+    preferredDays: preferred.join(', '), avoidDays: avoid.join(', '),
+    lastMinute, calendarInvite, unavailableUntil: unavailUntil
+  };
+  // The shared submitter owns the button's pending state.
   btn.disabled = false;
   btn.textContent = 'Save Preferences';
+  await submitDocentAction({ action: 'savePreferences', docent: name, preferences }, btn,
+    'Saving...', 'Preferences saved.', () => {
+      const saved = docentInfoMap[name];
+      return !!saved && Object.keys(preferences).every(key => saved[key] === preferences[key]);
+    });
 }
 
 function switchTab(tab) { activeTab = tab; render(); }
@@ -1663,7 +1711,7 @@ function renderAdmin() {
   let html = '<div class="admin-toolbar"><h2>Kathy’s coordinator page</h2><span>' +
     '<a href="#" onclick="exitAdmin(); return false;">Docent site</a> &nbsp; ' +
     '<a href="#" onclick="adminSignOut(); return false;">Sign out</a></span></div>' +
-    '<div id="message-area"></div><div id="admin-message" role="status"></div>';
+    '<div id="message-area" role="status" aria-live="polite"></div><div id="admin-message" role="status"></div>';
   if (adminStatus && adminStatus.coordinatorVersion >= 2) {
     html += '<p class="admin-summary">' + (adminStatus.autoAssignmentTrigger ?
       'Daily automatic assignment is scheduled. It selects volunteers for ordinary tours, school participants, Mindful Museum guides, and the Welcome Desk within 20 days of the tour.' :
@@ -1737,102 +1785,66 @@ function removeSaveBar() {
 
 async function saveSignups() {
   const btn = document.getElementById('save-btn');
-  btn.disabled = true;
-  btn.textContent = 'Saving...';
-  try {
-    const resp = await fetch(WEB_APP_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'signup', docent: currentDocent, slots: Array.from(selectedSlots), roles: selectedRoles })
+  const name = currentDocent;
+  const slots = Array.from(selectedSlots);
+  const roles = { ...selectedRoles };
+  const editableIds = allSlots.filter(s => s.status === '' || s.status === 'Open').map(s => s.slotId);
+  const saved = await submitDocentAction({ action: 'signup', docent: name, slots, roles }, btn,
+    'Saving...', 'Your availability has been saved.', () => editableIds.length > 0 && editableIds.every(id => {
+      const slot = allSlots.find(s => s.slotId === id);
+      if (!slot || slot.signups.includes(name) !== slots.includes(id)) return false;
+      return !slots.includes(id) || !roles[id] || ((slot.roleSignups || {})[roles[id]] || []).includes(name);
+    }));
+  if (!saved && currentDocent === name) {
+    // Keep the draft in memory if a rejected save refreshed the schedule.
+    selectedSlots = new Set(slots);
+    selectedRoles = roles;
+    document.querySelectorAll('.tour-row input[type="checkbox"]').forEach(input => {
+      input.checked = selectedSlots.has(input.value);
+      const roleSelect = input.parentElement.querySelector('.role-select');
+      if (roleSelect) {
+        roleSelect.style.display = input.checked ? '' : 'none';
+        roleSelect.value = roles[input.value] || '';
+      }
     });
-    const result = await resp.json();
-    if (result.ok) {
-      showMessage('Your availability has been saved.', 'success');
-      await loadData();
-    } else {
-      showMessage(result.error || 'Something went wrong. Please try again.', 'error');
-    }
-  } catch (err) {
-    showMessage('Could not save. Check your internet connection and try again.', 'error');
   }
-  btn.disabled = false;
-  btn.textContent = 'Save My Availability';
 }
 
 async function claimSlot(slotId, el) {
-  if (!confirm('Claim this tour? You will receive a calendar invite.')) return;
-  if (el.tagName === 'BUTTON') { el.disabled = true; el.textContent = '...'; }
-  try {
-    const resp = await fetch(WEB_APP_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'claim', slot: slotId, docent: currentDocent })
+  if (!confirm('Claim this tour?')) return;
+  const name = currentDocent;
+  await submitDocentAction({ action: 'claim', slot: slotId, docent: name }, el,
+    'Claiming...', 'You are assigned to this tour.', () => {
+      const slot = allSlots.find(s => s.slotId === slotId);
+      return !!slot && slotHasDocent(slot, name);
     });
-    const result = await resp.json();
-    if (result.ok) {
-      showMessage('Tour claimed! A calendar invite is on its way.', 'success');
-    } else {
-      showMessage(result.error || 'Someone else has already claimed this shift.', 'error');
-    }
-    await loadData();
-  } catch (err) {
-    showMessage('Could not claim. Please try again.', 'error');
-  }
 }
 
 async function withdrawOffer(slotId, el) {
   if (!confirm('Withdraw your offer for this tour?')) return;
-  el.disabled = true;
-  el.textContent = 'Withdrawing...';
-  try {
-    const resp = await fetch(WEB_APP_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'withdraw', slot: slotId, docent: currentDocent })
+  const name = currentDocent;
+  await submitDocentAction({ action: 'withdraw', slot: slotId, docent: name }, el,
+    'Withdrawing...', 'Your offer has been withdrawn.', () => {
+      const slot = allSlots.find(s => s.slotId === slotId);
+      return !!slot && !slot.signups.includes(name);
     });
-    const result = await resp.json();
-    if (result.ok) {
-      showMessage('Your offer has been withdrawn.', 'success');
-    } else {
-      showMessage(result.error || 'Could not withdraw. Please try again.', 'error');
-    }
-    await loadData();
-  } catch (err) {
-    showMessage('Could not withdraw. Please try again.', 'error');
-    el.disabled = false;
-    el.textContent = 'Withdraw';
-  }
 }
 
 async function dropOut(slotId, el) {
-  if (!confirm('Are you sure you want to drop out of this tour? The system will automatically reach out to find a replacement.')) return;
-  el.disabled = true;
-  el.textContent = 'Dropping...';
-  try {
-    const resp = await fetch(WEB_APP_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify({ action: 'dropout', slot: slotId, docent: currentDocent })
+  if (!confirm('Drop out of this tour? Your assignment will be removed and the tour will need a replacement.')) return;
+  const name = currentDocent;
+  await submitDocentAction({ action: 'dropout', slot: slotId, docent: name }, el,
+    'Dropping...', 'You are no longer assigned to this tour.', () => {
+      const slot = allSlots.find(s => s.slotId === slotId);
+      return !!slot && !slotHasDocent(slot, name);
     });
-    const result = await resp.json();
-    if (result.ok) {
-      showMessage('You have been removed from this tour. The system is contacting available docents.', 'success');
-    } else {
-      showMessage(result.error || 'Could not process. Please try again.', 'error');
-    }
-    await loadData();
-  } catch (err) {
-    showMessage('Could not process. Please try again.', 'error');
-    el.disabled = false;
-    el.textContent = 'Drop Out';
-  }
 }
 
 function showMessage(text, type) {
   const area = document.getElementById('message-area');
   if (!area) return;
   area.innerHTML = '<div class="message message-' + type + '">' + escapeHtml(text) + '</div>';
-  setTimeout(() => { area.innerHTML = ''; }, 5000);
+  if (area.scrollIntoView) area.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 function escapeHtml(str) {
