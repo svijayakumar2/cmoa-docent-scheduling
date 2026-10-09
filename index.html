@@ -479,6 +479,13 @@
     .admin-rules-table input[type="text"], .admin-rules-table input[type="number"] { width: 100%; box-sizing: border-box; font-family: inherit; font-size: 0.82rem; padding: 0.2rem 0.35rem; border: 1px solid #ccc; border-radius: 4px; }
     .admin-rules-note { font-size: 0.8rem; color: #777; margin-bottom: 0.6rem; }
     .admin-badge { display: inline-block; font-size: 0.7rem; background: #b3261e; color: #fff; border-radius: 8px; padding: 0.05rem 0.45rem; margin-left: 0.35rem; vertical-align: middle; }
+    .admin-toolbar { display: flex; gap: 0.75rem; align-items: center; justify-content: space-between; flex-wrap: wrap; margin: 0.75rem 0; }
+    .admin-toolbar input { padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px; font: inherit; }
+    .admin-table-scroll { overflow-x: auto; }
+    .admin-rules-table { min-width: 670px; }
+    .admin-rules-table th { background: #f3f5f6; }
+    .admin-empty { padding: 1rem 0; color: #666; }
+    .admin-summary { margin-bottom: 1rem; color: #555; font-size: 0.9rem; line-height: 1.5; }
 
     @media print {
       header, .tabs, .week-nav, .filter-bar, .save-bar, .btn-print, .btn-dropout, .name-search-wrap, .cal-print-btn-wrap, .cal-browse-back { display: none !important; }
@@ -519,7 +526,7 @@
 </div>
 
 <script>
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxfP-n-je44RKCbDv2P3w4gMp8OC5tJ5MZ5RsThTHhYcUiN8pzjXEg6wMV3hFGtuRX8TQ/exec';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw51EPqlOB8bH-hEtCgh6zD8Du6JEDts6hdgDCfQcFtE3FnX81eqCnI_7N-XruE2uvQbg/exec';
 
 let currentDocent = localStorage.getItem('cmoa_docent_name') || '';
 let allSlots = [];
@@ -534,9 +541,14 @@ let selectedRoles = {};  // slotId -> 'desk' or 'tour'
 let currentWeekStart = getMonday(new Date());
 let currentMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let browsing = false;  // viewing the monthly calendar without picking a name
-let adminMode = false; // Kathy's coordinator view
+let adminMode = window.location.hash === '#coordinator';
 let adminCode = sessionStorage.getItem('cmoa_admin_code') || '';
 let adminRules = null; // cached rules rows from the private spreadsheet
+let adminTab = 'preferences';
+let adminRulesDirty = false;
+let adminRulesSaving = false;
+let adminRuleSearch = '';
+let adminStatus = null;
 let activeTab = 'calendar';
 let tourTypeFilter = '';
 
@@ -681,12 +693,14 @@ async function loadData() {
 
 function updateHeaderControls() {
   const controls = document.getElementById('header-controls');
+  if (adminMode) { controls.innerHTML = ''; return; }
   if (currentDocent) {
     controls.innerHTML = '<span class="header-greeting">Welcome, <strong>' + escapeHtml(currentDocent) +
       '</strong> <a href="#" onclick="changeName(); return false;">Not you? Change</a></span>';
   } else {
     controls.innerHTML = '';
   }
+  controls.innerHTML += ' <a href="#coordinator" onclick="openAdmin(); return false;" style="margin-left:1rem;">Coordinator sign-in</a>';
 }
 
 function searchName(query) {
@@ -728,6 +742,7 @@ function selectDocent(name) {
 
 function render() {
   const app = document.getElementById('app');
+  updateHeaderControls();
 
   if (adminMode) {
     renderAdmin();
@@ -750,7 +765,7 @@ function render() {
       '<input class="name-search-input" type="text" placeholder="Type your name..." oninput="searchName(this.value)" autofocus>' +
       '<div class="name-results" id="name-results"></div>' +
       '<p style="margin-top:1.5rem;"><a href="#" onclick="browsing=true; render(); return false;" style="font-size:0.9rem; color:#1a3a4a;">Just want to see the schedule? View the monthly calendar</a></p>' +
-      '<p style="margin-top:0.75rem;"><a href="#" onclick="adminMode=true; render(); return false;" style="font-size:0.8rem; color:#999;">Coordinator sign-in</a></p>' +
+      '<p style="margin-top:0.75rem;"><a href="#coordinator" onclick="openAdmin(); return false;">Coordinator sign-in</a></p>' +
       '</div>';
     removeSaveBar();
     return;
@@ -899,7 +914,7 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
         const slotHasSchoolRoles = (slot.docentsNeeded_Lead > 0 || slot.docentsNeeded_Participant > 0);
         // Open desk/lead offers only after the server supports Kathy-picked
         // leads. Older deployments still apply certification and lead gates.
-        const canSignup = certified || (!legacyTourTagMap && (slotHasMindfulRoles || slotHasSchoolRoles));
+        const canSignup = certified || (!legacyTourTagMap && (slot.docentsNeeded_Desk > 0 || slotHasSchoolRoles));
 
         // Urgency: open, within 7 days, needs more docents
         const slotDate = new Date(slot.date + 'T00:00:00');
@@ -934,9 +949,8 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
               (!checked ? ' style="display:none"' : '') + '>' +
               '<option value="">-- Role --</option>';
             if (hasMindfulRoles) {
-              html += '<option value="desk"' + (curRole === 'desk' ? ' selected' : '') + '>Welcome Desk</option>' +
-                '<option value="tour"' + (curRole === 'tour' ? ' selected' : '') + '>' +
-                (legacyTourTagMap ? 'Tour' : 'Offer to Lead (Kathy confirms)') + '</option>';
+              if (slot.docentsNeeded_Desk > 0) html += '<option value="desk"' + (curRole === 'desk' ? ' selected' : '') + '>Welcome Desk</option>';
+              if (slot.docentsNeeded_MindfulTour > 0 && certified) html += '<option value="tour"' + (curRole === 'tour' ? ' selected' : '') + '>Tour guide</option>';
             }
             if (hasSchoolRoles) {
               const leadOk = !legacyTourTagMap || (docentInfoMap[currentDocent] && docentInfoMap[currentDocent].leadEligible);
@@ -959,11 +973,10 @@ function renderWeek(openSlots, assignedSlots, needsSubSlots) {
           if (hasMindfulRoles) {
             const deskSignups = (slot.roleSignups && slot.roleSignups.desk) ? slot.roleSignups.desk.length : 0;
             const tourSignups = (slot.roleSignups && slot.roleSignups.tour) ? slot.roleSignups.tour.length : 0;
-            const needsTour = legacyTourTagMap ? tourSignups < slot.docentsNeeded_MindfulTour : tourSignups === 0;
+            const needsTour = tourSignups < slot.docentsNeeded_MindfulTour;
             html += '<span class="tour-counts' + (deskSignups < slot.docentsNeeded_Desk || needsTour ? ' needs-more' : '') + '">' +
               'Desk: ' + deskSignups + '/' + slot.docentsNeeded_Desk +
-              (legacyTourTagMap ? ' &middot; Tour: ' + tourSignups + '/' + slot.docentsNeeded_MindfulTour :
-                ' &middot; Lead offers: ' + tourSignups) + '</span>';
+              ' &middot; Tour guides: ' + tourSignups + '/' + slot.docentsNeeded_MindfulTour + '</span>';
           } else if (hasSchoolRoles) {
             const leadSignups = (slot.roleSignups && slot.roleSignups.lead) ? slot.roleSignups.lead.length : 0;
             const partSignups = (slot.roleSignups && slot.roleSignups.participant) ? slot.roleSignups.participant.length : 0;
@@ -1365,6 +1378,19 @@ function setRole(selectEl) {
 // ADMIN (coordinator) VIEW
 // =====================
 let adminRulesLoading = false;
+let adminStatusLoading = false;
+
+function openAdmin() {
+  adminMode = true;
+  window.location.hash = 'coordinator';
+  render();
+}
+
+function switchAdminTab(tab) {
+  if (adminRulesSaving) return;
+  adminTab = tab;
+  render();
+}
 
 async function adminPost(payload) {
   payload.code = adminCode;
@@ -1377,15 +1403,25 @@ async function adminPost(payload) {
 }
 
 function exitAdmin() {
+  if (adminRulesSaving) return;
+  if (adminRulesDirty && !window.confirm('Leave without saving your preference changes?')) return;
+  if (adminRulesDirty) { adminRules = null; adminRulesDirty = false; }
   adminMode = false;
+  window.location.hash = '';
   render();
 }
 
 function adminSignOut() {
+  if (adminRulesSaving) return;
+  if (adminRulesDirty && !window.confirm('Sign out without saving your preference changes?')) return;
   adminCode = '';
   adminRules = null;
+  adminRulesDirty = false;
+  adminStatus = null;
+  adminTab = 'preferences';
   sessionStorage.removeItem('cmoa_admin_code');
   adminMode = false;
+  window.location.hash = '';
   render();
 }
 
@@ -1413,6 +1449,7 @@ async function adminLogin() {
     const result = await resp.json();
     if (result.ok) {
       adminCode = code;
+      adminTab = 'preferences';
       sessionStorage.setItem('cmoa_admin_code', code);
       render();
       adminLoadRules();
@@ -1427,239 +1464,257 @@ async function adminLogin() {
   if (btn) { btn.disabled = false; btn.textContent = 'Sign In'; }
 }
 
-function adminRoleOptions(slot, preselect) {
-  const isSchool = slot.docentsNeeded_Lead > 0 || slot.docentsNeeded_Participant > 0;
-  const isMM = slot.docentsNeeded_Desk > 0 || slot.docentsNeeded_MindfulTour > 0;
-  let opts = '';
-  if (isSchool) {
-    opts += '<option value="lead"' + (preselect === 'lead' ? ' selected' : '') + '>School tour lead</option>' +
-            '<option value="participant">Participant</option>';
-  }
-  if (isMM) {
-    opts += '<option value="mmlead"' + (preselect === 'mmlead' ? ' selected' : '') + '>Mindful tour lead</option>' +
-            '<option value="desk">Welcome Desk</option>';
-  }
-  opts += '<option value="docent"' + (preselect === 'docent' ? ' selected' : '') + '>Tour docent</option>';
-  return opts;
+function adminCandidates(slot, role) {
+  const roleKey = role === 'mmlead' || role === 'guide' ? 'tour' : role;
+  let offered = role === 'docent' ? (slot.signups || []) : ((slot.roleSignups || {})[roleKey] || []);
+  if (role === 'mmlead') offered = offered.filter(n => adminMindfulGuides(slot).includes(n));
+  const roster = new Set(allDocents.map(d => typeof d === 'string' ? d : d.name));
+  const assigned = (slot.assigned || '').split(',').map(n => n.trim());
+  return [...new Set(offered)].filter(n => roster.has(n) &&
+    ((role === 'lead' || role === 'mmlead') || assigned.indexOf(n) === -1));
 }
 
-function adminAssignControl(slot, preselect) {
-  return '<div class="admin-assign" data-slot="' + escapeAttr(slot.slotId) + '">' +
-    '<input type="text" list="docent-list" placeholder="Docent name...">' +
-    '<select>' + adminRoleOptions(slot, preselect) + '</select>' +
-    '<button onclick="adminAssignFromControl(this)">Assign</button>' +
-    '</div>';
+function adminMindfulGuides(slot) {
+  if (Array.isArray(slot.mindfulTourGuides)) return slot.mindfulTourGuides;
+  const desk = (slot.mindfulWelcomeDesk || '').split(',').map(n => n.trim());
+  return (slot.assigned || '').split(',').map(n => n.trim()).filter(n => n && !desk.includes(n));
+}
+
+function adminCandidateControl(slot, role, label) {
+  const names = adminCandidates(slot, role);
+  if (!names.length) return '<p class="admin-empty">No available volunteers for ' + escapeHtml(label.toLowerCase()) + ' yet.</p>';
+  const ready = adminStatus && adminStatus.coordinatorVersion >= 2;
+  return '<div class="admin-assign" data-slot="' + escapeAttr(slot.slotId) + '" data-role="' + role + '">' +
+    '<label>' + escapeHtml(label) + ' <select aria-label="' + escapeAttr(label) + '">' +
+    '<option value="">Choose from volunteers...</option>' +
+    names.map(n => '<option value="' + escapeAttr(n) + '">' + escapeHtml(n) + '</option>').join('') +
+    '</select></label><button onclick="adminAssignFromControl(this)"' + (!ready ? ' disabled' : '') + '>Confirm</button></div>';
 }
 
 async function adminAssignFromControl(btn) {
+  if (adminRulesDirty) { adminMessage('Save your preference changes before confirming an assignment.', true); return; }
   const wrap = btn.closest('.admin-assign');
   const slotId = wrap.getAttribute('data-slot');
-  const name = wrap.querySelector('input').value.trim();
-  const role = wrap.querySelector('select').value;
-  if (!name) { adminMessage('Type a docent name first.', true); return; }
-  await adminDoAssign(slotId, name, role, btn);
-}
-
-async function adminAssignVolunteer(btn) {
-  await adminDoAssign(btn.getAttribute('data-slot'), btn.getAttribute('data-name'),
-    btn.getAttribute('data-role'), btn);
-}
-
-async function adminDoAssign(slotId, name, role, btn) {
-  const oldText = btn.textContent;
+  const role = wrap.getAttribute('data-role');
+  const name = wrap.querySelector('select').value;
+  const slot = allSlots.find(s => s.slotId === slotId);
+  if (!slot || adminCandidates(slot, role).indexOf(name) === -1) {
+    adminMessage('Choose one of the volunteers for this tour and role.', true);
+    return;
+  }
   btn.disabled = true;
-  btn.textContent = 'Assigning...';
+  btn.textContent = 'Confirming...';
   try {
     const result = await adminPost({ action: 'adminAssign', slot: slotId, docent: name, role: role });
     if (result.ok) {
-      await loadData(); // re-renders the admin view with fresh data
-      adminMessage(result.message || 'Assigned.', false);
+      await loadData();
+      adminMessage(result.message || 'Assignment confirmed.', false);
       return;
     }
-    adminMessage(result.error || 'Something went wrong.', true);
+    adminMessage(result.error || 'Could not confirm the assignment.', true);
   } catch (e) {
     adminMessage('Could not reach the server. Try again.', true);
   }
   btn.disabled = false;
-  btn.textContent = oldText;
+  btn.textContent = 'Confirm';
+}
+
+async function adminLoadStatus() {
+  if (adminStatusLoading) return;
+  adminStatusLoading = true;
+  const code = adminCode;
+  try {
+    const result = await adminPost({ action: 'adminGetStatus' });
+    if (code === adminCode) adminStatus = result.ok ? result : { error: result.error || 'Status unavailable.' };
+  } catch (e) {
+    if (code === adminCode) adminStatus = { error: 'Could not reach the server.' };
+  }
+  adminStatusLoading = false;
+  if (adminMode && adminCode === code) render();
 }
 
 async function adminLoadRules() {
   if (adminRulesLoading) return;
   adminRulesLoading = true;
+  const code = adminCode;
   try {
     const result = await adminPost({ action: 'adminGetRules' });
-    adminRules = result.ok ? result.rules : { error: result.error || 'Could not load rules.' };
+    if (code === adminCode && !adminRulesDirty) adminRules = result.ok ? result.rules : { error: result.error || 'Could not load preferences.' };
   } catch (e) {
-    adminRules = { error: 'Could not reach the server.' };
+    if (code === adminCode && !adminRulesDirty) adminRules = { error: 'Could not reach the server.' };
   }
   adminRulesLoading = false;
-  if (adminMode && adminCode) render();
+  if (adminMode && adminCode === code) render();
+}
+
+function adminEditRule(input) {
+  const row = input.closest('tr');
+  const rule = adminRules.find(r => r.name === row.getAttribute('data-name'));
+  if (!rule) return;
+  rule.noPair = row.querySelector('.rule-nopair').value;
+  rule.maxPerMonth = row.querySelector('.rule-cap').value;
+  rule.noContact = row.querySelector('.rule-nocontact').checked;
+  rule.fewerSchool = row.querySelector('.rule-fewer').checked;
+  adminRulesDirty = true;
+  const status = document.getElementById('admin-rule-save-status');
+  if (status) status.textContent = 'Unsaved changes';
+}
+
+function filterAdminRules(value) {
+  adminRuleSearch = value;
+  document.querySelectorAll('#admin-rules-body tr').forEach(row => {
+    row.hidden = !row.getAttribute('data-name').toLowerCase().includes(value.trim().toLowerCase());
+  });
 }
 
 async function adminSaveRules() {
-  const btn = document.getElementById('admin-rules-save');
-  if (btn) { btn.disabled = true; btn.textContent = 'Saving...'; }
-  const rows = [];
-  document.querySelectorAll('#admin-rules-body tr').forEach(tr => {
-    rows.push({
-      name: tr.getAttribute('data-name'),
-      noPair: tr.querySelector('.rule-nopair').value.trim(),
-      maxPerMonth: tr.querySelector('.rule-cap').value.trim(),
-      noContact: tr.querySelector('.rule-nocontact').checked,
-      fewerSchool: tr.querySelector('.rule-fewer').checked
-    });
-  });
-  try {
-    const result = await adminPost({ action: 'adminSaveRules', rules: rows });
-    if (result.ok) {
-      adminRules = rows;
-      adminMessage(result.message || 'Rules saved.', false);
-    } else {
-      adminMessage(result.error || 'Could not save rules.', true);
-    }
-  } catch (e) {
-    adminMessage('Could not reach the server. Try again.', true);
+  if (adminRulesSaving || !Array.isArray(adminRules)) return;
+  if (!adminStatus || !adminStatus.preferencesEncrypted) {
+    adminMessage('Private preferences need to be set up before they can be saved. Contact Saranya.', true);
+    return;
   }
-  if (btn) { btn.disabled = false; btn.textContent = 'Save All Rules'; }
+  const rows = adminRules.map(r => ({ ...r, noPair: r.noPair.trim(), maxPerMonth: String(r.maxPerMonth || '').trim() }));
+  const invalid = rows.find(r => r.maxPerMonth && !/^[1-9]\d*$/.test(r.maxPerMonth));
+  if (invalid) { adminMessage('Enter a positive whole-number monthly cap for ' + invalid.name + ', or leave it blank.', true); return; }
+  adminRulesSaving = true;
+  render();
+  let result;
+  try {
+    result = await adminPost({ action: 'adminSaveRules', rules: rows });
+    if (result.ok) { adminRules = rows; adminRulesDirty = false; }
+  } catch (e) { result = { error: 'Could not reach the server. Your changes are still here; try saving again.' }; }
+  adminRulesSaving = false;
+  render();
+  adminMessage(result.ok ? 'Preferences saved.' : (result.error || 'Could not save preferences.'), !result.ok);
 }
 
-function adminSlotLine(slot, preselectRole, volunteers, volunteerRole) {
-  let html = '<div class="admin-slot">';
-  html += '<div class="admin-slot-head">' + escapeHtml(slot.dateDisplay) + ' &middot; ' +
-    escapeHtml(slot.timeDisplay || slot.time) + ' &middot; ' + escapeHtml(slot.tourType);
-  if (slot.status === 'Needs Sub') html += '<span class="admin-badge">Needs Sub</span>';
-  if (slot.status === 'Escalated') html += '<span class="admin-badge">Escalated</span>';
-  html += '</div>';
+function adminSlotSummary(slot) {
+  let html = '<div class="admin-slot-head">' + escapeHtml(slot.dateDisplay) + ' &middot; ' +
+    escapeHtml(slot.timeDisplay || slot.time) + ' &middot; ' + escapeHtml(slot.tourType) + '</div>';
   const bits = [];
-  if (slot.assigned) bits.push('Assigned: ' + escapeHtml(slot.assigned));
-  if (slot.tourLeadSchool) bits.push('Lead: ' + escapeHtml(slot.tourLeadSchool));
-  if (slot.mindfulTourLead) bits.push('Mindful lead: ' + escapeHtml(slot.mindfulTourLead));
-  if (slot.mindfulWelcomeDesk) bits.push('Desk: ' + escapeHtml(slot.mindfulWelcomeDesk));
-  if (!slot.assigned && slot.signups.length) bits.push('Signed up: ' + escapeHtml(slot.signups.join(', ')));
-  if (slot.details) bits.push(escapeHtml(slot.details));
-  if (bits.length) html += '<div class="admin-slot-sub">' + bits.join(' &middot; ') + '</div>';
-  if (volunteers && volunteers.length) {
-    html += '<div class="admin-slot-sub">Offered to lead: ' +
-      volunteers.map(n =>
-        '<button class="admin-volunteer-btn" data-slot="' + escapeAttr(slot.slotId) +
-        '" data-name="' + escapeAttr(n) + '" data-role="' + volunteerRole +
-        '" onclick="adminAssignVolunteer(this)">Make ' + escapeHtml(n) + ' the lead</button>'
-      ).join('') + '</div>';
-  }
-  html += adminAssignControl(slot, preselectRole);
-  html += '</div>';
-  return html;
+  bits.push('Assigned: ' + (slot.assigned || 'None yet'));
+  if (slot.tourLeadSchool) bits.push('Lead: ' + slot.tourLeadSchool);
+  if (slot.mindfulTourLead) bits.push('Mindful lead: ' + slot.mindfulTourLead);
+  if (slot.docentsNeeded_MindfulTour > 0) bits.push('Tour guides: ' + (adminMindfulGuides(slot).join(', ') || 'Not assigned yet'));
+  if (slot.mindfulWelcomeDesk) bits.push('Welcome desk: ' + slot.mindfulWelcomeDesk);
+  bits.push('Volunteers: ' + ((slot.signups || []).join(', ') || 'None yet'));
+  if (slot.details) bits.push(slot.details);
+  return html + '<div class="admin-slot-sub">' + bits.map(escapeHtml).join(' &middot; ') + '</div>';
+}
+
+function renderAdminPreferences() {
+  let html = '<section class="admin-section"><h2>Preferences (private)</h2>' +
+    '<p class="admin-summary">Set the preferences the automatic assigner uses for each docent. ' +
+    'Save changes here; they are stored encrypted in the private spreadsheet.</p>' +
+    '<p class="admin-rules-note">Pairing exclusions work in both directions. A blank monthly cap means no cap. ' +
+    'Do not contact excludes a docent from automatic selection and tour emails. ' +
+    'Fewer school tours gives other eligible volunteers priority.</p>';
+  if (adminRules === null) return html + '<p>Loading preferences...</p></section>';
+  if (adminRules.error) return html + '<p class="message message-error">' + escapeHtml(adminRules.error) + '</p>' +
+    '<button class="btn btn-primary" onclick="adminRules=null; adminStatus=null; render();">Try again</button></section>';
+  const canSave = adminStatus && adminStatus.preferencesEncrypted && !adminRulesSaving;
+  const disabled = !canSave ? ' disabled' : '';
+  const names = allDocents.map(d => typeof d === 'string' ? d : d.name);
+  html += '<datalist id="rule-docent-list">' + names.map(n => '<option value="' + escapeAttr(n) + '">').join('') + '</datalist>';
+  html += '<div class="admin-toolbar"><label>Find a docent <input type="search" value="' + escapeAttr(adminRuleSearch) +
+    '" placeholder="Name" oninput="filterAdminRules(this.value)"></label>' +
+    '<span id="admin-rule-save-status" role="status">' + (adminRulesDirty ? 'Unsaved changes' : '') + '</span>' +
+    '<button class="btn btn-primary" id="admin-rules-save" onclick="adminSaveRules()"' + disabled + '>' +
+    (adminRulesSaving ? 'Saving...' : 'Save Preferences') + '</button></div>';
+  html += '<div class="admin-table-scroll"><table class="admin-rules-table"><thead><tr>' +
+    '<th>Docent</th><th>Do not pair with</th><th>Max tours / month</th><th>Do not contact</th><th>Fewer school tours</th>' +
+    '</tr></thead><tbody id="admin-rules-body">';
+  adminRules.forEach(r => {
+    const hidden = !r.name.toLowerCase().includes(adminRuleSearch.trim().toLowerCase());
+    html += '<tr data-name="' + escapeAttr(r.name) + '"' + (hidden ? ' hidden' : '') + '><th scope="row">' + escapeHtml(r.name) + '</th>' +
+      '<td><input type="text" class="rule-nopair" list="rule-docent-list" placeholder="Names, separated by commas" aria-label="Do not pair ' + escapeAttr(r.name) + ' with" value="' + escapeAttr(r.noPair) + '" oninput="adminEditRule(this)"' + disabled + '></td>' +
+      '<td><input type="number" class="rule-cap" min="1" step="1" placeholder="No cap" aria-label="Monthly cap for ' + escapeAttr(r.name) + '" value="' + escapeAttr(r.maxPerMonth) + '" oninput="adminEditRule(this)"' + disabled + '></td>' +
+      '<td><input type="checkbox" class="rule-nocontact" aria-label="Do not contact ' + escapeAttr(r.name) + '"' + (r.noContact ? ' checked' : '') + ' onchange="adminEditRule(this)"' + disabled + '></td>' +
+      '<td><input type="checkbox" class="rule-fewer" aria-label="Fewer school tours for ' + escapeAttr(r.name) + '"' + (r.fewerSchool ? ' checked' : '') + ' onchange="adminEditRule(this)"' + disabled + '></td></tr>';
+  });
+  return html + '</tbody></table></div></section>';
 }
 
 function renderAdmin() {
   const app = document.getElementById('app');
   app.style.maxWidth = '1100px';
   removeSaveBar();
-
   if (legacyTourTagMap) {
-    app.innerHTML = '<div class="name-search-wrap">' +
-      '<h2>Coordinator setup pending</h2>' +
-      '<p>Coordinator sign-in and private rules are not available yet. Saranya is finishing setup.</p>' +
-      '<p>Docent signup and the monthly calendar are available.</p>' +
-      '<p style="margin-top:1rem;"><a href="#" onclick="exitAdmin(); return false;">&larr; Back to the website</a></p>' +
-      '</div>';
+    app.innerHTML = '<div class="name-search-wrap"><h2>Coordinator setup pending</h2><p>Saranya is finishing setup.</p>' +
+      '<a href="#" onclick="exitAdmin(); return false;">Back to the website</a></div>';
     return;
   }
-
   if (!adminCode) {
-    app.innerHTML = '<div class="name-search-wrap">' +
-      '<h2>Coordinator Sign-In</h2>' +
-      '<p>Enter the coordinator passcode.</p>' +
-      '<input class="name-search-input" type="password" id="admin-code-input" placeholder="Passcode" ' +
-        'onkeydown="if(event.key===\'Enter\')adminLogin()" autofocus>' +
-      '<p id="admin-login-error" style="color:#b3261e; font-size:0.85rem; min-height:1.2em;"></p>' +
+    app.innerHTML = '<div class="name-search-wrap"><h2>Kathy’s coordinator sign-in</h2>' +
+      '<p>Enter the coordinator passcode to manage preferences and choose tour leads.</p>' +
+      '<input class="name-search-input" type="password" id="admin-code-input" placeholder="Passcode" onkeydown="if(event.key===\'Enter\')adminLogin()" autofocus>' +
+      '<p id="admin-login-error" style="color:#b3261e; min-height:1.2em;"></p>' +
       '<button class="btn btn-primary" id="admin-login-btn" onclick="adminLogin()">Sign In</button>' +
-      '<p style="margin-top:1rem;"><a href="#" onclick="exitAdmin(); return false;" style="font-size:0.85rem; color:#1a3a4a;">&larr; Back</a></p>' +
-      '</div>';
+      '<p style="margin-top:1rem;"><a href="#" onclick="exitAdmin(); return false;">Back to the website</a></p></div>';
     return;
   }
-
-  const todayKeyStr = dateKey(new Date());
+  if (adminRules === null && !adminRulesLoading) adminLoadRules();
+  if (adminRules !== null && adminStatus === null && !adminStatusLoading) adminLoadStatus();
+  const today = dateKey(new Date());
   const horizon = dateKey(addDays(new Date(), 42));
-  const upcoming = allSlots.filter(s => s.date >= todayKeyStr && s.date <= horizon &&
-    s.status !== 'Tour Cancelled');
-
-  const docentNames = allDocents.map(d => (typeof d === 'string') ? d : d.name);
-  let html = '<div id="message-area"></div><div id="admin-message"></div>';
-  html += '<datalist id="docent-list">' +
-    docentNames.map(n => '<option value="' + escapeAttr(n) + '">').join('') + '</datalist>';
-
-  html += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">' +
-    '<h2 style="font-size:1.2rem; color:#1a3a4a;">Coordinator View</h2>' +
-    '<span style="font-size:0.85rem;">' +
-    '<a href="#" onclick="exitAdmin(); return false;" style="color:#1a3a4a; margin-right:1rem;">&larr; Docent site</a>' +
-    '<a href="#" onclick="adminSignOut(); return false;" style="color:#999;">Sign out</a>' +
-    '</span></div>';
-
-  // --- Section 1: things that need Kathy ---
-  const needsDecision = upcoming.filter(s =>
-    (s.docentsNeeded_Lead > 0 && !s.tourLeadSchool) ||
-    (s.docentsNeeded_MindfulTour > 0 && !s.mindfulTourLead) ||
-    s.status === 'Needs Sub' || s.status === 'Escalated');
-
-  html += '<div class="admin-section"><h2>Needs Your Decision' +
-    (needsDecision.length ? ' <span class="admin-badge">' + needsDecision.length + '</span>' : '') + '</h2>';
-  if (needsDecision.length === 0) {
-    html += '<p style="font-size:0.85rem; color:#777;">Nothing waiting on you right now.</p>';
-  } else {
-    needsDecision.forEach(s => {
-      const needsSchoolLead = s.docentsNeeded_Lead > 0 && !s.tourLeadSchool;
-      const needsMMLead = s.docentsNeeded_MindfulTour > 0 && !s.mindfulTourLead;
-      const volunteerRole = needsSchoolLead ? 'lead' : 'mmlead';
-      const volunteers = needsSchoolLead
-        ? ((s.roleSignups && s.roleSignups.lead) || [])
-        : (needsMMLead ? ((s.roleSignups && s.roleSignups.tour) || []) : []);
-      html += adminSlotLine(s, needsSchoolLead ? 'lead' : (needsMMLead ? 'mmlead' : 'docent'),
-        volunteers, volunteerRole);
+  const upcoming = allSlots.filter(s => s.date >= today && s.date <= horizon && s.status !== 'Tour Cancelled');
+  const leads = upcoming.filter(s => !isDonorSlot(s) && ((s.docentsNeeded_Lead > 0 && !s.tourLeadSchool) || (s.docentsNeeded_MindfulTour > 0 && !s.mindfulTourLead)));
+  const exceptions = upcoming.filter(s => s.status === 'Needs Sub' || s.status === 'Escalated');
+  let html = '<div class="admin-toolbar"><h2>Kathy’s coordinator page</h2><span>' +
+    '<a href="#" onclick="exitAdmin(); return false;">Docent site</a> &nbsp; ' +
+    '<a href="#" onclick="adminSignOut(); return false;">Sign out</a></span></div>' +
+    '<div id="message-area"></div><div id="admin-message" role="status"></div>';
+  if (adminStatus && adminStatus.coordinatorVersion >= 2) {
+    html += '<p class="admin-summary">' + (adminStatus.autoAssignmentTrigger ?
+      'Daily automatic assignment is scheduled. It selects volunteers for ordinary tours, school participants, Mindful Museum guides, and the Welcome Desk within 20 days of the tour.' :
+      'Automatic assignment is not scheduled under the deployment account. Saranya needs to check the scheduled jobs.') +
+      ' You choose school and Mindful Museum leads and handle exceptions.</p>';
+    if (!adminStatus.preferencesEncrypted) html += '<p class="message message-error">Private preferences need one-time setup before they can be saved. Contact Saranya.</p>';
+    if (adminStatus.lastAutoAssignmentError) html += '<p class="message message-error">The latest automatic assignment failed. Saranya needs to check it; saved preferences have not been bypassed.</p>';
+  } else if (adminStatus) {
+    html += '<p class="message message-error">A coordinator update is needed before saving preferences or confirming assignments. Saranya is finishing setup.</p>';
+  } else { html += '<p class="admin-rules-note">Checking coordinator setup...</p>'; }
+  html += '<nav class="tabs" aria-label="Coordinator sections">';
+  [['preferences','Preferences'],['leads','Lead decisions (' + leads.length + ')'],['exceptions','Exceptions (' + exceptions.length + ')'],['schedule','Schedule']].forEach(([key,label]) => {
+    html += '<button class="tab' + (adminTab === key ? ' active' : '') + '" onclick="switchAdminTab(\'' + key + '\')"' + (adminRulesSaving ? ' disabled' : '') + '>' + label + '</button>';
+  });
+  html += '</nav>';
+  if (adminTab === 'preferences') html += renderAdminPreferences();
+  if (adminTab === 'leads') {
+    html += '<section class="admin-section"><h2>Choose tour leads</h2><p class="admin-summary">For school tours, choose from the lead volunteers. For Mindful Museum, choose from the assigned tour guides who signed up for that tour. Other places are filled automatically.</p>';
+    if (!leads.length) html += '<p class="admin-empty">No lead decisions are waiting.</p>';
+    leads.forEach(s => {
+      html += '<div class="admin-slot">' + adminSlotSummary(s);
+      if (s.docentsNeeded_Lead > 0 && !s.tourLeadSchool) html += adminCandidateControl(s,'lead','School tour lead');
+      if (s.docentsNeeded_MindfulTour > 0 && !s.mindfulTourLead) html += adminCandidateControl(s,'mmlead','Mindful Museum lead');
+      html += '</div>';
     });
+    html += '</section>';
   }
-  html += '</div>';
-
-  // --- Section 2: all upcoming tours ---
-  html += '<div class="admin-section"><h2>All Tours (next 6 weeks)</h2>';
-  if (upcoming.length === 0) {
-    html += '<p style="font-size:0.85rem; color:#777;">No upcoming tours.</p>';
-  } else {
-    upcoming.forEach(s => { html += adminSlotLine(s, 'docent', null, ''); });
-  }
-  html += '</div>';
-
-  // --- Section 3: private docent rules ---
-  html += '<div class="admin-section"><h2>Docent Rules (private)</h2>';
-  html += '<p class="admin-rules-note">These rules are managed here and are not displayed on the docent page. ' +
-    '"Do not pair with" takes a comma-separated list of names.</p>';
-  if (adminRules === null) {
-    html += '<p style="font-size:0.85rem; color:#777;">Loading rules&hellip;</p>';
-    adminLoadRules();
-  } else if (adminRules.error) {
-    html += '<p style="font-size:0.85rem; color:#b3261e;">' + escapeHtml(adminRules.error) + '</p>' +
-      '<button class="btn btn-primary" onclick="adminRules=null; render();">Try Again</button>';
-  } else {
-    html += '<table class="admin-rules-table"><thead><tr>' +
-      '<th>Docent</th><th>Do not pair with</th><th>Max tours / month</th>' +
-      '<th>Do not contact</th><th>Fewer school tours</th></tr></thead>' +
-      '<tbody id="admin-rules-body">';
-    adminRules.forEach(r => {
-      html += '<tr data-name="' + escapeAttr(r.name) + '">' +
-        '<td>' + escapeHtml(r.name) + '</td>' +
-        '<td><input type="text" class="rule-nopair" list="docent-list" value="' + escapeAttr(r.noPair) + '"></td>' +
-        '<td><input type="number" class="rule-cap" min="1" value="' + escapeAttr(r.maxPerMonth) + '"></td>' +
-        '<td><input type="checkbox" class="rule-nocontact"' + (r.noContact ? ' checked' : '') + '></td>' +
-        '<td><input type="checkbox" class="rule-fewer"' + (r.fewerSchool ? ' checked' : '') + '></td>' +
-        '</tr>';
+  if (adminTab === 'exceptions') {
+    html += '<section class="admin-section"><h2>Exceptions</h2><p class="admin-summary">Review tours needing a replacement. Choices are limited to unassigned volunteers for that tour and role.</p>';
+    if (!exceptions.length) html += '<p class="admin-empty">No exceptions are waiting.</p>';
+    exceptions.forEach(s => {
+      html += '<div class="admin-slot">' + adminSlotSummary(s);
+      if (isDonorSlot(s)) html += '<p class="admin-empty">Arrange donor-tour replacements directly and update the schedule.</p>';
+      else if (s.docentsNeeded_Lead > 0) {
+        if (!s.tourLeadSchool) html += adminCandidateControl(s,'lead','School tour lead');
+        if (s.docentsNeeded_Participant > (s.participantSchool || '').split(',').filter(n => n.trim()).length) html += adminCandidateControl(s,'participant','School participant');
+      } else if (s.docentsNeeded_Desk > 0 || s.docentsNeeded_MindfulTour > 0) {
+        if (!s.mindfulTourLead && s.docentsNeeded_MindfulTour > 0) html += adminCandidateControl(s,'mmlead','Mindful Museum lead');
+        if (s.docentsNeeded_Desk > (s.mindfulWelcomeDesk || '').split(',').filter(n => n.trim()).length) html += adminCandidateControl(s,'desk','Welcome Desk');
+        if (s.docentsNeeded_MindfulTour > adminMindfulGuides(s).length) html += adminCandidateControl(s,'guide','Tour guide');
+      } else html += adminCandidateControl(s,'docent','Tour docent');
+      html += '</div>';
     });
-    html += '</tbody></table>';
-    html += '<p style="margin-top:0.75rem;"><button class="btn btn-primary" id="admin-rules-save" ' +
-      'onclick="adminSaveRules()">Save All Rules</button></p>';
+    html += '</section>';
   }
-  html += '</div>';
-
+  if (adminTab === 'schedule') {
+    html += '<section class="admin-section"><h2>Schedule — next 6 weeks</h2><p class="admin-summary">Review assignments and volunteers here. Routine assignments are handled by the automatic assigner.</p>';
+    if (!upcoming.length) html += '<p class="admin-empty">No upcoming tours.</p>';
+    upcoming.forEach(s => { html += '<div class="admin-slot">' + adminSlotSummary(s) + '<div class="admin-slot-sub">Status: ' + escapeHtml(s.status || 'Open') + '</div></div>'; });
+    html += '</section>';
+  }
   app.innerHTML = html;
 }
 
